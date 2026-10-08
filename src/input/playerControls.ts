@@ -1,26 +1,25 @@
+import { settings, type KeyAction } from '../game/settings.ts';
 import type { PlayerInput } from '../sim/player.ts';
 
 type Pressable = 'special' | 'switchUnit' | 'cycleSpecial' | 'yell';
 
-/** Modern defaults; the original used a QWE/AD/ZXC grid with Ctrl to fire. */
-const KEYS: Record<string, { move?: [number, number]; hold?: 'fire' | 'alternate'; press?: Pressable }> = {
-  KeyW: { move: [0, -1] },
-  ArrowUp: { move: [0, -1] },
-  KeyS: { move: [0, 1] },
-  ArrowDown: { move: [0, 1] },
-  KeyA: { move: [-1, 0] },
-  ArrowLeft: { move: [-1, 0] },
-  KeyD: { move: [1, 0] },
-  ArrowRight: { move: [1, 0] },
-  Space: { hold: 'fire' },
-  KeyJ: { hold: 'fire' },
-  ShiftLeft: { hold: 'alternate' },
-  ShiftRight: { hold: 'alternate' },
-  KeyE: { press: 'special' },
-  KeyK: { press: 'special' },
-  KeyQ: { press: 'cycleSpecial' },
-  Tab: { press: 'switchUnit' },
-  KeyF: { press: 'yell' },
+interface Binding {
+  move?: [number, number];
+  hold?: 'fire' | 'alternate';
+  press?: Pressable;
+}
+
+const ACTION_BINDINGS: Partial<Record<KeyAction, Binding>> = {
+  up: { move: [0, -1] },
+  down: { move: [0, 1] },
+  left: { move: [-1, 0] },
+  right: { move: [1, 0] },
+  attack: { hold: 'fire' },
+  alternate: { hold: 'alternate' },
+  special: { press: 'special' },
+  cycleSpecial: { press: 'cycleSpecial' },
+  switchUnit: { press: 'switchUnit' },
+  yell: { press: 'yell' },
 };
 
 const STICK_DEADZONE = 0.35;
@@ -39,11 +38,22 @@ export class PlayerControls {
   /** Called on the first input, e.g. to start the battle. */
   onActivity?: () => void;
   private readonly cleanup: (() => void)[] = [];
+  /** Key code -> what it does, from the player's key bindings. */
+  private keys = new Map<string, Binding>();
 
   constructor(touchRoot: HTMLElement | null) {
+    this.cleanup.push(
+      settings.subscribe((s) => {
+        this.keys = new Map();
+        for (const [action, codes] of Object.entries(s.keys)) {
+          const binding = ACTION_BINDINGS[action as KeyAction];
+          if (binding) for (const code of codes) this.keys.set(code, binding);
+        }
+      }),
+    );
     const down = (e: KeyboardEvent) => {
-      const binding = KEYS[e.code];
-      if (!binding || e.metaKey || e.ctrlKey) return;
+      const binding = this.keys.get(e.code);
+      if (!binding || e.metaKey || e.ctrlKey || e.target instanceof HTMLInputElement) return;
       e.preventDefault();
       if (binding.press && !e.repeat) this.pressed.add(binding.press);
       this.held.add(e.code);
@@ -69,7 +79,7 @@ export class PlayerControls {
     let fire = this.touchFire;
     let alternate = this.touchAlternate;
     for (const code of this.held) {
-      const b = KEYS[code];
+      const b = this.keys.get(code);
       if (b?.move) {
         moveX += b.move[0];
         moveY += b.move[1];

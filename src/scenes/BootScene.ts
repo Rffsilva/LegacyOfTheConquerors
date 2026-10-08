@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { ScenarioSummary, SpriteIndex } from '../data/assets.ts';
 import { setServices } from '../game/services.ts';
+import { settings } from '../game/settings.ts';
 import { SOUND_FILES, soundKey } from '../game/sounds.ts';
 import { PALETTE_CYCLE_MS } from '../game/timing.ts';
 import { LivePalette } from '../render/palette.ts';
@@ -46,8 +47,15 @@ export class BootScene extends Phaser.Scene {
       elapsed += delta;
       while (elapsed >= PALETTE_CYCLE_MS) {
         elapsed -= PALETTE_CYCLE_MS;
-        palette.step();
+        if (settings.value.colorCycling) palette.step();
       }
+    });
+
+    settings.subscribe((s) => {
+      this.game.sound.volume = s.volume;
+      this.game.sound.mute = s.muted;
+      // The original's brightness steps lightened or darkened the whole palette.
+      document.getElementById('game')?.style.setProperty('--brightness', String(1 + s.brightness * 0.08));
     });
 
     document.getElementById('loading')?.remove();

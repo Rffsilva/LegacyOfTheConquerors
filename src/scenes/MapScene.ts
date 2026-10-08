@@ -4,7 +4,7 @@ import { Order } from '../data/objects.ts';
 import { GRID_SIZE } from '../data/tiles.ts';
 import { services } from '../game/services.ts';
 import { soundKey } from '../game/sounds.ts';
-import { TICK_MS } from '../game/timing.ts';
+import { settings, tickMs } from '../game/settings.ts';
 import { CameraControls } from '../input/cameraControls.ts';
 import { PlayerControls } from '../input/playerControls.ts';
 import { TILE_MARGIN, TILE_SPACING } from '../render/textures.ts';
@@ -14,6 +14,7 @@ import { specialName } from '../sim/specialNames.ts';
 import { NO_INPUT } from '../sim/player.ts';
 import { World } from '../sim/world.ts';
 import { Radar } from '../ui/radar.ts';
+import { openSettings } from '../ui/settingsDialog.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
 export interface BattleConfig {
@@ -127,6 +128,11 @@ export class MapScene extends Phaser.Scene {
         if (this.world?.outcome || confirm('Abandon this battle? Your team returns as it was before it.')) this.finish();
       },
       finish: () => this.finish(),
+      settings: () => {
+        const wasRunning = this.running;
+        this.setRunning(false);
+        openSettings(() => wasRunning && this.setRunning(true));
+      },
     });
     this.updateHud();
   }
@@ -136,11 +142,12 @@ export class MapScene extends Phaser.Scene {
     const view = this.view;
     if (!world || !view) return;
 
+    const tick = tickMs(settings.value.gameSpeed);
     if (this.running && !world.outcome) {
       this.accumulator += delta * this.speed;
       let ticks = 0;
-      while (this.accumulator >= TICK_MS && ticks < MAX_TICKS_PER_FRAME) {
-        this.accumulator -= TICK_MS;
+      while (this.accumulator >= tick && ticks < MAX_TICKS_PER_FRAME) {
+        this.accumulator -= tick;
         world.tick([this.playerInput?.read() ?? NO_INPUT]);
         view.sync(world);
         this.handleEvents();
@@ -158,7 +165,7 @@ export class MapScene extends Phaser.Scene {
       this.hudTimer = 0;
       this.updateHud();
     }
-    view.draw(this.running ? this.accumulator / TICK_MS : 1);
+    view.draw(this.running ? this.accumulator / tick : 1, settings.value.healthBars, world.players[0]?.control?.teamNum ?? 0);
 
     const control = world.players[0]?.control;
     const image = control ? view.imageFor(control) : undefined;

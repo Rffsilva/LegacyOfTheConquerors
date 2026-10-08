@@ -82,12 +82,14 @@ function vitals(guy: Guy): { hp: number; mp: number } {
 
 export interface MenuActions {
   continueCampaign?: () => void;
+  settings: () => void;
   newCampaign: (difficulty: number) => void;
   skirmish: () => void;
 }
 
 export interface BarracksActions {
   changed: () => void;
+  settings: () => void;
   fight: (scenario: number) => void;
   menu: () => void;
 }
@@ -153,6 +155,7 @@ export class Screens {
           }, 'New campaign'),
         ),
         h('button', { className: 'pill', onclick: actions.skirmish }, 'Skirmish (any field, ready-made squad)'),
+        h('button', { className: 'pill', onclick: actions.settings }, '⚙ Settings'),
         h('p', { className: 'fineprint' }, `Difficulty scales enemy strength: ${DIFFICULTY_LEVELS.join('% / ')}%.`),
       ),
     );
@@ -177,6 +180,7 @@ export class Screens {
         h('h1', {}, 'Barracks'),
         h('div', { className: 'stat-chip' }, `Cash ${formatNumber(campaign.money)}`),
         h('div', { className: 'stat-chip' }, `Score ${formatNumber(campaign.score)}`),
+        h('button', { className: 'icon', ariaLabel: 'Settings', onclick: actions.settings }, '⚙'),
       );
 
       const teamList = h('ol', { className: 'team-list' },

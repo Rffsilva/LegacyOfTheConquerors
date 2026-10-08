@@ -4,6 +4,7 @@ import type { BattleConfig } from '../scenes/MapScene.ts';
 import { Guy } from '../sim/guy.ts';
 import type { World } from '../sim/world.ts';
 import { Screens } from '../ui/screens.ts';
+import { openSettings } from '../ui/settingsDialog.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 import { applyBattle, newCampaign, squadFor, type Campaign } from './campaign.ts';
 import { services } from './services.ts';
@@ -42,6 +43,7 @@ export class App {
           this.barracks('Welcome, commander. You have 5,000 to hire your first warriors.');
         },
         skirmish: () => this.skirmish(),
+        settings: () => openSettings(),
       },
       this.campaign,
     );
@@ -55,6 +57,7 @@ export class App {
       campaign,
       {
         changed: () => this.save(),
+        settings: () => openSettings(),
         menu: () => this.menu(),
         fight: (n) => this.fight(n),
       },

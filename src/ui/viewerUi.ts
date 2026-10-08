@@ -1,5 +1,6 @@
 import type { ScenarioAsset, ScenarioSummary } from '../data/assets.ts';
 import { PALETTE, teamColorBase } from '../formats/palette.ts';
+import { settings } from '../game/settings.ts';
 import type { Outcome } from '../sim/world.ts';
 
 export interface ViewerActions {
@@ -12,6 +13,7 @@ export interface ViewerActions {
   menu(): void;
   /** Campaign: continue to the battle report. */
   finish(): void;
+  settings(): void;
 }
 
 export type BattleMode = 'skirmish' | 'campaign';
@@ -38,6 +40,9 @@ const CONTROLS_HELP = [
   ['Switch character', 'Tab · X'],
   ['Call squad ("Yo!")', 'F · Y'],
   ['Squad defend on/off', 'Shift + F'],
+  ['Pause', 'P'],
+  ['Radar on/off', 'M'],
+  ['Change keys, speed, sound…', '⚙ Settings'],
 ];
 
 /**
@@ -72,6 +77,7 @@ class ViewerUi {
         <button class="icon play" data-act="play" aria-label="Start battle">▶</button>
         <button class="icon speed" data-act="speed" aria-label="Battle speed">1×</button>
         <button class="icon" data-act="info" aria-label="Briefing and controls" aria-expanded="false">?</button>
+        <button class="icon" data-act="settings" aria-label="Settings">⚙</button>
       </header>
       <section class="info" hidden></section>
       <div class="status">
@@ -121,26 +127,29 @@ class ViewerUi {
       else if (act === 'restart') this.actions?.restart();
       else if (act === 'menu') this.actions?.menu();
       else if (act === 'finish') this.actions?.finish();
-      else if (act === 'radar') this.toggleRadar();
+      else if (act === 'radar') settings.update({ radar: !settings.value.radar });
+      else if (act === 'settings') this.actions?.settings();
     });
     window.addEventListener('keydown', (e) => {
-      if (e.code === 'KeyM' && !root.hidden && !(e.target instanceof HTMLInputElement)) this.toggleRadar();
+      if (root.hidden || e.target instanceof HTMLInputElement || document.querySelector('dialog[open]')) return;
+      if (settings.value.keys.radar.includes(e.code)) settings.update({ radar: !settings.value.radar });
+      else if (settings.value.keys.pause.includes(e.code)) this.actions?.togglePlay();
     });
-    this.setRadarVisible(readPreference('radar') !== 'off');
+    settings.subscribe((s) => {
+      this.setRadarVisible(s.radar);
+      root.dataset.touch = s.touchControls;
+      root.dataset.touchSize = s.touchSize;
+      root.dataset.leftHanded = String(s.leftHanded);
+    });
   }
 
   get radarCanvas(): HTMLCanvasElement {
     return this.root.querySelector('.radar')!;
   }
 
-  private toggleRadar(): void {
-    this.setRadarVisible(this.root.querySelector('.radar-box')!.classList.contains('collapsed'));
-  }
-
   private setRadarVisible(visible: boolean): void {
     this.root.querySelector('.radar-box')!.classList.toggle('collapsed', !visible);
     this.root.querySelector('.radar-toggle')!.setAttribute('aria-pressed', String(visible));
-    writePreference('radar', visible ? 'on' : 'off');
   }
 
   /** The container the touch controls live in. */
@@ -283,23 +292,6 @@ function reflow(lines: string[]): string[] {
     }
   }
   return paragraphs;
-}
-
-/** Per-browser UI preferences; storage may be unavailable, which just means defaults. */
-function readPreference(key: string): string | null {
-  try {
-    return localStorage.getItem(`lotc.pref.${key}`);
-  } catch {
-    return null;
-  }
-}
-
-function writePreference(key: string, value: string): void {
-  try {
-    localStorage.setItem(`lotc.pref.${key}`, value);
-  } catch {
-    // not saved; fine
-  }
 }
 
 function titleCase(s: string): string {

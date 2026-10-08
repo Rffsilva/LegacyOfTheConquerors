@@ -1,11 +1,25 @@
 import Phaser from 'phaser';
-import { SPRITE_FILES } from '../data/objects.ts';
+import { Order, SPRITE_FILES } from '../data/objects.ts';
 import { GRID_SIZE } from '../data/tiles.ts';
 import type { Walker } from '../sim/walker.ts';
+import { PALETTE } from '../formats/palette.ts';
 import type { World } from '../sim/world.ts';
 import type { IndexedTextures } from './textures.ts';
 
+/** Health bar colours from base.h: LOW_HP_COLOR, MID_HP_COLOR and LIGHT_GREEN. */
+const HP_LOW = rgb(42);
+const HP_MID = rgb(237);
+const HP_HIGH = rgb(56);
+
+function rgb(index: number): number {
+  const [r, g, b] = PALETTE[index];
+  return (r << 16) | (g << 8) | b;
+}
+
+export type HealthBars = 'all' | 'team' | 'off';
+
 interface Tracked {
+  ob: Walker;
   image: Phaser.GameObjects.Image;
   fromX: number;
   fromY: number;
@@ -27,11 +41,13 @@ export class WorldRenderer {
   private readonly layer: Phaser.Tilemaps.TilemapLayer;
   private readonly tracked = new Map<number, Tracked>();
   private generation = 0;
+  private readonly bars: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, textures: IndexedTextures, layer: Phaser.Tilemaps.TilemapLayer) {
     this.scene = scene;
     this.textures = textures;
     this.layer = layer;
+    this.bars = scene.add.graphics().setDepth(1e6);
   }
 
   /** Call after each simulation tick. */
@@ -52,11 +68,29 @@ export class WorldRenderer {
     world.tileChanges.length = 0;
   }
 
-  /** Call every frame with how far we are between the last tick and the next (0..1). */
-  draw(alpha: number): void {
+  /**
+   * Call every frame with how far we are between the last tick and the next (0..1). Hurt units
+   * get the original's small health bar under them (walker.cpp draw_smallHealthBar).
+   */
+  draw(alpha: number, healthBars: HealthBars = 'off', team = 0): void {
+    this.bars.clear();
     for (const t of this.tracked.values()) {
-      t.image.setPosition(Math.round(t.fromX + (t.toX - t.fromX) * alpha), Math.round(t.fromY + (t.toY - t.fromY) * alpha));
+      const x = Math.round(t.fromX + (t.toX - t.fromX) * alpha);
+      const y = Math.round(t.fromY + (t.toY - t.fromY) * alpha);
+      t.image.setPosition(x, y);
+      if (healthBars !== 'off') this.drawHealth(t.ob, x, y, healthBars === 'all' || t.ob.teamNum === team);
     }
+  }
+
+  private drawHealth(ob: Walker, x: number, y: number, show: boolean): void {
+    if (!show || (ob.order !== Order.LIVING && ob.order !== Order.GENERATOR)) return;
+    const { hitpoints: hp, maxHitpoints: max } = ob.stats;
+    const ratio = hp / Math.max(max, 1);
+    if (ratio < 0 || ratio >= 0.95) return;
+    const color = hp * 3 < max ? HP_LOW : (hp * 3) / 2 < max ? HP_MID : HP_HIGH;
+    const top = y + ob.sizey + 1;
+    this.bars.fillStyle(0x000000, 1).fillRect(x - 1, top - 1, ob.sizex + 2, 3);
+    this.bars.fillStyle(color, 1).fillRect(x, top, Math.max(1, Math.round(ob.sizex * ratio)), 1);
   }
 
   /** The image showing a given object, e.g. to follow it with the camera. */
@@ -65,6 +99,7 @@ export class WorldRenderer {
   }
 
   destroy(): void {
+    this.bars.destroy();
     for (const t of this.tracked.values()) t.image.destroy();
     this.tracked.clear();
   }
@@ -79,7 +114,7 @@ export class WorldRenderer {
     let t = this.tracked.get(ob.id);
     if (!t) {
       const image = this.scene.add.image(ob.xpos, ob.ypos, key, frame).setOrigin(0, 0);
-      t = { image, fromX: ob.xpos, fromY: ob.ypos, toX: ob.xpos, toY: ob.ypos, seen: gen };
+      t = { ob, image, fromX: ob.xpos, fromY: ob.ypos, toX: ob.xpos, toY: ob.ypos, seen: gen };
       this.tracked.set(ob.id, t);
     } else {
       const jump = Math.abs(ob.xpos - t.toX) + Math.abs(ob.ypos - t.toY);
