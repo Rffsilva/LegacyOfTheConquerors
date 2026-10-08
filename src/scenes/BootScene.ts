@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import type { ScenarioSummary, SpriteIndex } from '../data/assets.ts';
 import { setServices } from '../game/services.ts';
+import { SOUND_FILES, soundKey } from '../game/sounds.ts';
 import { PALETTE_CYCLE_MS } from '../game/timing.ts';
 import { LivePalette } from '../render/palette.ts';
 import { SpriteBank } from '../render/spriteBank.ts';
 import { IndexedTextures } from '../render/textures.ts';
+import { spriteInfoFromBundle } from '../sim/spriteInfo.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
 export class BootScene extends Phaser.Scene {
@@ -17,6 +19,7 @@ export class BootScene extends Phaser.Scene {
     this.load.binary('sprites-bin', 'sprites.bin');
     this.load.json('sprites-index', 'sprites.json');
     this.load.json('scenario-index', 'scenarios/index.json');
+    for (const [name, file] of Object.entries(SOUND_FILES)) this.load.audio(soundKey(name), `sound/${file}`);
 
     const status = document.getElementById('loading');
     this.load.on(Phaser.Loader.Events.PROGRESS, (p: number) => {
@@ -25,15 +28,15 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    const bank = new SpriteBank(
-      this.cache.binary.get('sprites-bin') as ArrayBuffer,
-      this.cache.json.get('sprites-index') as SpriteIndex,
-    );
+    const bin = this.cache.binary.get('sprites-bin') as ArrayBuffer;
+    const index = this.cache.json.get('sprites-index') as SpriteIndex;
+    const bank = new SpriteBank(bin, index);
+    const spriteInfo = spriteInfoFromBundle(index, new Uint8Array(bin));
     const palette = new LivePalette();
     const textures = new IndexedTextures(this.textures, bank, palette);
     textures.tileset();
     const scenarios = this.cache.json.get('scenario-index') as ScenarioSummary[];
-    setServices({ bank, palette, textures, scenarios });
+    setServices({ bank, palette, textures, scenarios, spriteInfo });
     viewerUi().setScenarios(scenarios);
 
     // The palette cycle is global, so drive it from the game loop rather than any one scene.

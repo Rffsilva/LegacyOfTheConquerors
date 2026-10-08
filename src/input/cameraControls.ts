@@ -1,12 +1,11 @@
 import Phaser from 'phaser';
 
 const MAX_ZOOM = 8;
-const KEY_PAN_SPEED = 600; // screen pixels per second
 const WHEEL_ZOOM_STEP = 1.0015;
 
 /**
- * Pan and zoom for a world of fixed size: drag or arrow keys/WASD to pan, pinch or mouse wheel
- * to zoom toward the pointer. Works the same with mouse, touch and pen.
+ * Pan and zoom for a world of fixed size: drag to pan, pinch or mouse wheel to zoom toward the
+ * pointer, and smooth following of a target. Works the same with mouse, touch and pen.
  */
 export class CameraControls {
   private readonly scene: Phaser.Scene;
@@ -14,7 +13,8 @@ export class CameraControls {
   private readonly worldWidth: number;
   private readonly worldHeight: number;
   private pinchDistance = 0;
-  private keys?: Record<'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'W' | 'A' | 'S' | 'D', Phaser.Input.Keyboard.Key>;
+  /** When the user last panned by hand; following pauses for a moment after that. */
+  private lastManual = -Infinity;
 
   constructor(scene: Phaser.Scene, worldWidth: number, worldHeight: number) {
     this.scene = scene;
@@ -31,7 +31,6 @@ export class CameraControls {
     scene.scale.on(Phaser.Scale.Events.RESIZE, this.clampZoom, this);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.scale.off(Phaser.Scale.Events.RESIZE, this.clampZoom, this));
 
-    this.keys = scene.input.keyboard?.addKeys('UP,DOWN,LEFT,RIGHT,W,A,S,D') as typeof this.keys;
 
     this.setZoom(this.defaultZoom());
   }
@@ -60,13 +59,19 @@ export class CameraControls {
     cam.setScroll(worldX - halfW - (screenX - halfW) / newZoom, worldY - halfH - (screenY - halfH) / newZoom);
   }
 
-  update(delta: number): void {
-    if (!this.keys) return;
-    const k = this.keys;
-    const step = (KEY_PAN_SPEED * delta) / 1000 / this.cam.zoom;
-    const dx = (k.RIGHT.isDown || k.D.isDown ? 1 : 0) - (k.LEFT.isDown || k.A.isDown ? 1 : 0);
-    const dy = (k.DOWN.isDown || k.S.isDown ? 1 : 0) - (k.UP.isDown || k.W.isDown ? 1 : 0);
-    if (dx || dy) this.cam.setScroll(this.cam.scrollX + dx * step, this.cam.scrollY + dy * step);
+  /** Eases the camera toward (x, y) unless the user recently panned by hand. */
+  follow(x: number, y: number, delta: number): void {
+    if (this.scene.time.now - this.lastManual < 2500) return;
+    const cam = this.cam;
+    const t = 1 - Math.exp(-delta / 120);
+    const cx = cam.scrollX + cam.width / 2;
+    const cy = cam.scrollY + cam.height / 2;
+    cam.centerOn(cx + (x - cx) * t, cy + (y - cy) * t);
+  }
+
+  /** Resume following straight away (e.g. when the player moves). */
+  resumeFollowing(): void {
+    this.lastManual = -Infinity;
   }
 
   private minZoom(): number {
@@ -103,6 +108,7 @@ export class CameraControls {
     }
 
     if (pointer.isDown) {
+      this.lastManual = this.scene.time.now;
       const dx = (pointer.x - pointer.prevPosition.x) / this.cam.zoom;
       const dy = (pointer.y - pointer.prevPosition.y) / this.cam.zoom;
       this.cam.setScroll(this.cam.scrollX - dx, this.cam.scrollY - dy);
