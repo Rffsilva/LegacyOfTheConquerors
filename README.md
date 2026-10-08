@@ -29,8 +29,21 @@ npm run dev        # http://localhost:5173 (also reachable from your phone on th
 | `npm run build`          | Typecheck and build a static site into `dist/`          |
 | `npm test`               | Unit tests, plus integrity checks on the converted data |
 | `npm run convert-assets` | Regenerate `public/assets` from an OpenGlad checkout    |
+| `npm run make-icons`     | Regenerate the app icons in `public/icons`              |
 
 Open a specific scenario with `?scen=scen12`.
+
+## Installing and offline play
+
+The production build is an installable web app that plays fully offline. `dist/` is a static
+site: put it on any HTTPS host (GitHub Pages, Netlify, Cloudflare Pages, itch.io...). On the first
+visit a service worker caches the whole game (about 3 MB). After that it works offline, and
+it can be installed from the main menu's **Install** button, or on iPhone/iPad via
+Share → Add to Home Screen. When a new build is deployed, players get a "new version is ready"
+prompt.
+
+The service worker only runs in production builds (`npm run build && npm run preview`), not
+in `npm run dev`.
 
 ## Assets
 
@@ -71,8 +84,8 @@ tests/         Vitest suites
 1. ~~Asset pipeline and scenario viewer~~
 2. ~~Combat engine, player control and special abilities~~
 3. ~~Campaign: recruiting, training, rewards and saving~~
-4. **Presentation.** HUD radar/minimap, help screens, settings, music and polish.
-5. **Ship it.** Installable offline PWA, plus iOS and Android builds via Capacitor.
+4. ~~**Presentation.** Radar, settings, music, field manual~~
+5. **Ship it.** ~~Installable offline web app~~, then iOS and Android builds via Capacitor.
 
 ## License and credits
 

@@ -8,7 +8,8 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "convert-assets": "node tools/convert-assets.ts"
+    "convert-assets": "node tools/convert-assets.ts",
+    "make-icons": "node tools/make-icons.ts"
   },
   "repository": {
     "type": "git",

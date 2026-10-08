@@ -1,10 +1,19 @@
 {
+  "id": "./",
   "name": "Legacy of the Conquerors",
   "short_name": "Conquerors",
-  "description": "A modern browser and mobile remake of OpenGlad.",
+  "description": "A modern remake of OpenGlad (Gladiator by FSGames): lead a band of gladiators through a campaign of battlefields.",
   "start_url": "./",
+  "scope": "./",
   "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "orientation": "any",
-  "background_color": "#000000",
-  "theme_color": "#14110f"
+  "background_color": "#14110f",
+  "theme_color": "#14110f",
+  "categories": ["games"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }

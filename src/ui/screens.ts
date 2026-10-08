@@ -86,6 +86,10 @@ export interface MenuActions {
   help: () => void;
   newCampaign: (difficulty: number) => void;
   skirmish: () => void;
+  /** Present when the browser offers a one-tap install. */
+  install?: () => void;
+  /** Show "Add to Home Screen" instructions (iPhone/iPad). */
+  manualInstall?: boolean;
 }
 
 export interface BarracksActions {
@@ -161,6 +165,9 @@ export class Screens {
           h('button', { className: 'pill', onclick: actions.help }, '📖 Field manual'),
           h('button', { className: 'pill', onclick: actions.settings }, '⚙ Settings'),
         ),
+        actions.install && h('button', { className: 'pill', onclick: actions.install }, '⬇ Install the app (plays offline)'),
+        actions.manualInstall &&
+          h('p', { className: 'fineprint' }, 'To install: tap Share, then "Add to Home Screen". It then plays offline, full screen.'),
         h('p', { className: 'fineprint' }, `Difficulty scales enemy strength: ${DIFFICULTY_LEVELS.join('% / ')}%.`),
       ),
     );

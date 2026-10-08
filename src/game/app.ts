@@ -5,10 +5,12 @@ import type { BattleConfig } from '../scenes/MapScene.ts';
 import { Guy } from '../sim/guy.ts';
 import type { World } from '../sim/world.ts';
 import { Screens } from '../ui/screens.ts';
+import { h } from '../ui/dom.ts';
 import { openHelp } from '../ui/helpDialog.ts';
 import { openSettings } from '../ui/settingsDialog.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 import { applyBattle, newCampaign, squadFor, type Campaign } from './campaign.ts';
+import { canInstall, initPwa, install, needsManualInstall, onInstallChange } from './pwa.ts';
 import { services } from './services.ts';
 import { loadCampaign, saveCampaign } from './storage.ts';
 
@@ -21,10 +23,14 @@ export class App {
   private readonly screens: Screens;
   private campaign: Campaign | null = loadCampaign();
 
+  private onMenu = false;
+
   constructor(game: Phaser.Game) {
     this.game = game;
     const { bank, scenarios } = services();
     this.screens = new Screens(document.getElementById('screens')!, bank, scenarios);
+    initPwa((apply) => showUpdateBanner(apply));
+    onInstallChange(() => this.onMenu && this.menu());
   }
 
   start(): void {
@@ -35,6 +41,7 @@ export class App {
 
   menu(): void {
     this.leaveBattle();
+    this.onMenu = true;
     music.play('menu');
     history.replaceState(null, '', location.pathname);
     this.screens.showMenu(
@@ -48,12 +55,15 @@ export class App {
         skirmish: () => this.skirmish(),
         settings: () => openSettings(),
         help: () => openHelp('basics'),
+        install: canInstall() ? () => void install() : undefined,
+        manualInstall: needsManualInstall(),
       },
       this.campaign,
     );
   }
 
   barracks(notice?: string): void {
+    this.onMenu = false;
     const campaign = this.campaign;
     if (!campaign) return this.menu();
     this.leaveBattle();
@@ -109,6 +119,7 @@ export class App {
   }
 
   private startBattle(config: BattleConfig): void {
+    this.onMenu = false;
     this.screens.hide();
     music.play('battle');
     viewerUi().root.hidden = false;
@@ -129,4 +140,15 @@ export class App {
   private save(): void {
     if (this.campaign) saveCampaign(this.campaign);
   }
+}
+
+/** A small banner offering to switch to a newly downloaded version. */
+function showUpdateBanner(apply: () => void): void {
+  if (document.querySelector('.update-banner')) return;
+  const banner = h('div', { className: 'update-banner', role: 'status' },
+    h('span', {}, 'A new version is ready.'),
+    h('button', { className: 'pill primary', onclick: () => { banner.remove(); apply(); } }, 'Reload'),
+    h('button', { className: 'icon small', ariaLabel: 'Later', onclick: () => banner.remove() }, '✕'),
+  );
+  document.body.append(banner);
 }
