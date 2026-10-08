@@ -8,9 +8,13 @@ Built with TypeScript, [Phaser 3](https://phaser.io) and [Vite](https://vite.dev
 
 ## Status
 
-**Milestone 1: asset pipeline and scenario viewer.** All 53 original scenarios load, with their maps,
-units, team colours, palette-cycled water and briefings. You can pan and zoom with mouse, keyboard or touch.
-There is no gameplay yet; see the roadmap.
+Playable. Start a campaign, hire and train a team in the barracks, and fight through the
+original's fields. Defeat every enemy, then walk onto an exit. Skirmish mode lets you try any of
+the 53 fields with a ready-made squad.
+
+- **Combat:** a faithful, deterministic port of OpenGlad's simulation, including every special ability
+- **Controls:** keyboard, gamepad and on-screen touch controls; press **?** in battle for the list
+- **Campaign:** hiring, training, rewards, levelling and permanent losses, saved in the browser
 
 ## Getting started
 
@@ -53,9 +57,11 @@ The binary formats are documented in [src/formats](src/formats).
 src/formats/   Parsers for the original file formats (GladPack, pixie, .fss scenario, VGA palette)
 src/data/      Tables ported from the C++ source (tile ids, object orders/families → sprites)
 src/render/    Indexed-colour → texture conversion, palette cycling
+src/sim/       The game simulation (walkers, AI, specials, world), independent of Phaser
+src/game/      Campaign rules, saving and the app flow between menus and battles
 src/scenes/    Phaser scenes
 src/input/     Camera pan/zoom (mouse, keyboard, touch, pinch)
-src/ui/        HTML overlay UI
+src/ui/        HTML overlay UI: battle HUD, menus, barracks, battle report
 tools/         Asset converter (runs directly with Node's TypeScript support)
 tests/         Vitest suites
 ```
@@ -63,14 +69,10 @@ tests/         Vitest suites
 ## Roadmap
 
 1. ~~Asset pipeline and scenario viewer~~
-2. **Simulation core.** Port `walker`/`living`/`weapon`/`effect` into a deterministic fixed-tick
-   engine (≈12 ticks/s, like the original) that doesn't depend on Phaser, so it can be unit-tested.
-   Includes enemy AI, generators, treasure, doors and exits.
-3. **Player control.** Keyboard, gamepad, and on-screen touch stick and buttons. Switching between squad members.
-4. **Team management.** Recruiting, training and levelling (`picker.cpp`), plus campaign
-   progress saved locally.
-5. **Presentation.** Sound, HUD and radar, help screens, settings.
-6. **Ship it.** Installable offline PWA, plus iOS and Android builds via Capacitor.
+2. ~~Combat engine, player control and special abilities~~
+3. ~~Campaign: recruiting, training, rewards and saving~~
+4. **Presentation.** HUD radar/minimap, help screens, settings, music and polish.
+5. **Ship it.** Installable offline PWA, plus iOS and Android builds via Capacitor.
 
 ## License and credits
 

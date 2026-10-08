@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { ScenarioAsset } from '../data/assets.ts';
-import { LivingFamily, Order } from '../data/objects.ts';
+import { Order } from '../data/objects.ts';
 import { GRID_SIZE } from '../data/tiles.ts';
 import { services } from '../game/services.ts';
 import { soundKey } from '../game/sounds.ts';
@@ -9,24 +9,37 @@ import { CameraControls } from '../input/cameraControls.ts';
 import { PlayerControls } from '../input/playerControls.ts';
 import { TILE_MARGIN, TILE_SPACING } from '../render/textures.ts';
 import { WorldRenderer } from '../render/worldRenderer.ts';
-import { Guy } from '../sim/guy.ts';
+import type { Guy } from '../sim/guy.ts';
 import { specialName } from '../sim/specialNames.ts';
 import { NO_INPUT } from '../sim/player.ts';
 import { World } from '../sim/world.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
-/**
- * Until recruiting exists, every battle starts with this level-1 squad. The player starts in
- * control of the last one placed, so the sturdy soldier goes last.
- */
-const DEFAULT_SQUAD = [LivingFamily.MAGE, LivingFamily.ELF, LivingFamily.ARCHER, LivingFamily.SOLDIER];
+export interface BattleConfig {
+  id: string;
+  /** Skirmish: free play on any field. Campaign: results feed back into the campaign. */
+  mode: 'skirmish' | 'campaign';
+  squad: Guy[];
+  completed?: number[];
+  alreadyWon?: boolean;
+  difficulty?: number;
+  /** Campaign: called once the player continues past the result. */
+  onFinish?: (world: World, par: number) => void;
+  /** Skirmish: back to the main menu. */
+  menu?: () => void;
+  running?: boolean;
+  speed?: number;
+}
 
 /** Never run more than this many ticks in one frame (e.g. after the tab was hidden). */
 const MAX_TICKS_PER_FRAME = 8;
 
 /** A scenario's battlefield with the simulation running on it. */
 export class MapScene extends Phaser.Scene {
-  private scenarioId = '';
+  private config!: BattleConfig;
+  /** Pristine copies of the squad, so a skirmish can be restarted. */
+  private initialSquad: Guy[] = [];
+  private par = 1;
   private controls?: CameraControls;
   private world?: World;
   private view?: WorldRenderer;
@@ -40,8 +53,9 @@ export class MapScene extends Phaser.Scene {
     super('map');
   }
 
-  init(data: { id: string; running?: boolean; speed?: number }): void {
-    this.scenarioId = data.id;
+  init(data: BattleConfig): void {
+    this.config = data;
+    this.initialSquad = data.squad.map((g) => g.clone());
     this.running = data.running ?? false;
     this.speed = data.speed ?? this.speed;
     this.accumulator = 0;
@@ -49,7 +63,7 @@ export class MapScene extends Phaser.Scene {
 
   preload(): void {
     const key = this.cacheKey();
-    if (!this.cache.json.exists(key)) this.load.json(key, `assets/scenarios/${this.scenarioId}.json`);
+    if (!this.cache.json.exists(key)) this.load.json(key, `assets/scenarios/${this.config.id}.json`);
   }
 
   create(): void {
@@ -62,8 +76,12 @@ export class MapScene extends Phaser.Scene {
       scenarioType: scenario.type,
       spriteInfo,
       seed: (Math.random() * 2 ** 32) >>> 0,
-      squad: DEFAULT_SQUAD.map((f) => new Guy(f)),
+      squad: this.config.squad,
+      completed: this.config.completed,
+      alreadyWon: this.config.alreadyWon,
+      difficulty: this.config.difficulty,
     });
+    this.par = scenario.par ?? (Number(scenario.id.replace('scen', '')) || 1);
 
     const { width, height } = scenario.map;
     const tiles = Array.from(this.world.grid);
@@ -91,12 +109,18 @@ export class MapScene extends Phaser.Scene {
     };
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.playerInput?.destroy());
 
-    viewerUi().showScenario(scenario, {
-      select: (id) => this.scene.restart({ id, running: false, speed: this.speed }),
+    const campaign = this.config.mode === 'campaign';
+    viewerUi().showScenario(scenario, campaign ? 'campaign' : 'skirmish', {
+      select: (id) => this.scene.restart({ ...this.config, id, squad: this.freshSquad(), running: false, speed: this.speed }),
       zoom: (factor) => this.controls?.zoomBy(factor),
       togglePlay: () => this.setRunning(!this.running),
       cycleSpeed: () => this.cycleSpeed(),
-      restart: () => this.scene.restart({ id: this.scenarioId, running: true, speed: this.speed }),
+      restart: () => this.scene.restart({ ...this.config, squad: this.freshSquad(), running: true, speed: this.speed }),
+      menu: () => {
+        if (!campaign) return this.config.menu?.();
+        if (this.world?.outcome || confirm('Abandon this battle? Your team returns as it was before it.')) this.finish();
+      },
+      finish: () => this.finish(),
     });
     this.updateHud();
   }
@@ -196,7 +220,19 @@ export class MapScene extends Phaser.Scene {
   }
 
   private cacheKey(): string {
-    return `scenario:${this.scenarioId}`;
+    return `scenario:${this.config.id}`;
+  }
+
+  private freshSquad(): Guy[] {
+    return this.initialSquad.map((g) => g.clone());
+  }
+
+  /** Campaign battles report back; an unfinished battle counts as abandoned. */
+  private finish(): void {
+    const world = this.world;
+    if (!world) return;
+    world.outcome ??= { result: 'defeat', reason: 'You abandoned the battle.' };
+    this.config.onFinish?.(world, this.par);
   }
 
   private squadCentre(w: number, h: number): [number, number] {

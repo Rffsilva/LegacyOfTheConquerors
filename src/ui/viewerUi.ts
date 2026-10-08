@@ -8,7 +8,13 @@ export interface ViewerActions {
   togglePlay(): void;
   cycleSpeed(): void;
   restart(): void;
+  /** Skirmish: back to the main menu. Campaign: abandon the battle. */
+  menu(): void;
+  /** Campaign: continue to the battle report. */
+  finish(): void;
 }
+
+export type BattleMode = 'skirmish' | 'campaign';
 
 export interface UnitCard {
   name: string;
@@ -52,14 +58,17 @@ class ViewerUi {
   private scenarios: ScenarioSummary[] = [];
   private actions?: ViewerActions;
   private lastCard = '';
+  private mode: BattleMode = 'skirmish';
 
   constructor(root: HTMLElement) {
     this.root = root;
     root.innerHTML = `
       <header class="bar">
-        <button class="icon" data-act="prev" aria-label="Previous scenario">‹</button>
-        <select class="picker" aria-label="Scenario"></select>
-        <button class="icon" data-act="next" aria-label="Next scenario">›</button>
+        <button class="icon" data-act="menu" aria-label="Menu">☰</button>
+        <button class="icon skirmish-only" data-act="prev" aria-label="Previous scenario">‹</button>
+        <select class="picker skirmish-only" aria-label="Scenario"></select>
+        <div class="field-title campaign-only"></div>
+        <button class="icon skirmish-only" data-act="next" aria-label="Next scenario">›</button>
         <button class="icon play" data-act="play" aria-label="Start battle">▶</button>
         <button class="icon speed" data-act="speed" aria-label="Battle speed">1×</button>
         <button class="icon" data-act="info" aria-label="Briefing and controls" aria-expanded="false">?</button>
@@ -106,6 +115,8 @@ class ViewerUi {
       else if (act === 'play') this.actions?.togglePlay();
       else if (act === 'speed') this.actions?.cycleSpeed();
       else if (act === 'restart') this.actions?.restart();
+      else if (act === 'menu') this.actions?.menu();
+      else if (act === 'finish') this.actions?.finish();
     });
   }
 
@@ -121,17 +132,20 @@ class ViewerUi {
     );
   }
 
-  showScenario(scenario: ScenarioAsset, actions: ViewerActions): void {
+  showScenario(scenario: ScenarioAsset, mode: BattleMode, actions: ViewerActions): void {
     this.actions = actions;
+    this.mode = mode;
+    this.root.dataset.mode = mode;
     this.picker.value = scenario.id;
-    history.replaceState(null, '', `?scen=${scenario.id}`);
+    this.root.querySelector('.field-title')!.textContent = titleCase(scenario.title || scenario.id);
+    if (mode === 'skirmish') history.replaceState(null, '', `?scen=${scenario.id}`);
 
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]>) =>
       Object.assign(document.createElement(tag), props);
     const help = el('dl', { className: 'help' });
     for (const [action, keys] of CONTROLS_HELP) help.append(el('dt', { textContent: action }), el('dd', { textContent: keys }));
-    const restart = el('button', { className: 'pill', textContent: 'Restart battle' });
-    restart.dataset.act = 'restart';
+    const restart = el('button', { className: 'pill', textContent: mode === 'campaign' ? 'Abandon battle' : 'Restart battle' });
+    restart.dataset.act = mode === 'campaign' ? 'menu' : 'restart';
 
     const paragraphs = reflow(scenario.text);
     this.info.replaceChildren(
@@ -203,16 +217,18 @@ class ViewerUi {
 
   showOutcome(outcome: Outcome): void {
     const won = outcome.result === 'victory';
+    const reason = outcome.result === 'defeat' ? outcome.reason : outcome.result === 'retreat' ? 'You withdrew from the field.' : 'The field is yours.';
     const button = (text: string, act: string) => {
       const b = Object.assign(document.createElement('button'), { className: 'pill', textContent: text });
       b.dataset.act = act;
       return b;
     };
     const actions = Object.assign(document.createElement('div'), { className: 'actions' });
-    actions.append(button('Fight again', 'restart'), ...(won ? [button('Next scenario', 'next-scenario')] : []));
+    if (this.mode === 'campaign') actions.append(button('Continue', 'finish'));
+    else actions.append(button('Fight again', 'restart'), ...(won ? [button('Next scenario', 'next-scenario')] : []));
     this.outcome.replaceChildren(
-      Object.assign(document.createElement('h2'), { textContent: won ? 'Victory!' : 'Defeat!' }),
-      Object.assign(document.createElement('p'), { textContent: won ? 'The field is yours.' : outcome.reason }),
+      Object.assign(document.createElement('h2'), { textContent: won ? 'Victory!' : outcome.result === 'retreat' ? 'Withdrawn' : 'Defeat!' }),
+      Object.assign(document.createElement('p'), { textContent: reason }),
       actions,
     );
     this.outcome.hidden = false;

@@ -425,3 +425,387 @@ select:focus-visible {
   font-weight: 600;
   background: rgb(160 48 40 / 0.75);
 }
+
+/* --- Mode-specific battle controls ------------------------------------------- */
+
+#ui[data-mode='campaign'] .skirmish-only,
+#ui:not([data-mode='campaign']) .campaign-only {
+  display: none;
+}
+
+.field-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+/* --- Full-screen menus ------------------------------------------------------- */
+
+#screens {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow-y: auto;
+  padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right)) calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  background:
+    radial-gradient(ellipse at top, rgb(214 170 92 / 0.12), transparent 60%),
+    var(--bg);
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#screens h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+#screens h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+  color: var(--accent);
+}
+
+.pill.primary {
+  background: rgb(214 170 92 / 0.85);
+  border-color: var(--accent);
+  color: #1b140c;
+  font-weight: 600;
+}
+
+.pill.danger {
+  border-color: rgb(200 80 70 / 0.6);
+  color: #f0b4ac;
+}
+
+.pill.on,
+.pill.toggle.on {
+  background: rgb(214 170 92 / 0.3);
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.icon.small {
+  width: 36px;
+  min-height: 36px;
+  font-size: 1rem;
+}
+
+canvas.sprite {
+  image-rendering: pixelated;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  max-width: 420px;
+  margin: 8vh auto 0;
+  text-align: center;
+}
+
+.menu h1 {
+  font-size: 1.9rem !important;
+}
+
+.menu-heroes {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  min-height: 72px;
+}
+
+.tagline,
+.fineprint {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+
+.fineprint {
+  font-size: 0.8rem;
+}
+
+.menu-new {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.segmented {
+  display: flex;
+  gap: 6px;
+}
+
+.segmented > * {
+  flex: 1;
+}
+
+/* --- Barracks ------------------------------------------------------------- */
+
+.barracks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.barracks-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.barracks-top h1 {
+  flex: 1;
+}
+
+.stat-chip {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.notice {
+  min-height: 1.2em;
+  margin: 0;
+  color: var(--accent);
+}
+
+.barracks main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .barracks main {
+    grid-template-columns: 1fr;
+  }
+
+  .barracks .panel {
+    order: -1;
+  }
+}
+
+.team,
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 52vh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.member {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  text-align: left;
+  background: transparent;
+}
+
+.member canvas {
+  grid-row: span 2;
+  justify-self: center;
+}
+
+.member.selected {
+  border-color: var(--accent);
+  background: rgb(214 170 92 / 0.15);
+}
+
+.member-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.empty,
+.blurb,
+.derived {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.family-picker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.portrait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.name input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: rgb(0 0 0 / 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.stats {
+  display: grid;
+  gap: 4px;
+}
+
+.stat {
+  display: grid;
+  grid-template-columns: 1fr 36px 3ch 36px;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat output {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat.changed output,
+.stat.changed span {
+  color: var(--accent);
+}
+
+.buy {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.cost {
+  margin-right: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost.short {
+  color: #f0907f;
+}
+
+.barracks-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 240px;
+}
+
+.field span {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* --- Battle report --------------------------------------------------------------- */
+
+.report {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 460px;
+  margin: 8vh auto 0;
+  padding: 20px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.report p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.report-numbers {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 16px;
+  margin: 0;
+  text-align: left;
+}
+
+.report-numbers dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.levelups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.levelups strong {
+  color: var(--accent);
+}
+
+.fallen {
+  color: #f0b4ac !important;
+}

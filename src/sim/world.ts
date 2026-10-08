@@ -31,7 +31,11 @@ export type WorldEvent =
   | { type: 'exit'; level: number; who: number }
   | { type: 'freeze'; ticks: number };
 
-export type Outcome = { result: 'victory'; exitTo?: number } | { result: 'defeat'; reason: string };
+export type Outcome =
+  | { result: 'victory'; exitTo?: number }
+  | { result: 'defeat'; reason: string }
+  /** Withdrew through an exit to a field already won; nothing is gained or lost. */
+  | { result: 'retreat'; exitTo: number };
 
 export interface WorldOptions {
   map: MapGrid;
@@ -45,6 +49,10 @@ export interface WorldOptions {
   squad?: readonly Guy[];
   /** Number of human players; 0 lets the AI fight the whole battle. */
   players?: number;
+  /** Scenario numbers already won, which exits may retreat to before the field is clear. */
+  completed?: readonly number[];
+  /** This field was won before: only the squad, exits and teleporters remain (game.cpp). */
+  alreadyWon?: boolean;
 }
 
 export class World {
@@ -78,6 +86,7 @@ export class World {
   searchCounter = 0;
   events: WorldEvent[] = [];
   readonly players: PlayerController[];
+  private readonly completed: ReadonlySet<number>;
   private idCounter = 0;
 
   constructor(options: WorldOptions) {
@@ -95,7 +104,9 @@ export class World {
     for (const ob of options.objects) this.placeScenarioObject(ob);
     // game.cpp: scale every placed object by its level and the difficulty.
     for (const ob of [...this.oblist]) ob.setDifficulty(ob.stats.level);
+    this.completed = new Set(options.completed ?? []);
     this.placeSquad(options.squad ?? []);
+    if (options.alreadyWon) this.clearWonField();
     this.players = Array.from({ length: options.players ?? 1 }, (_, i) => new PlayerController(this, i, 0));
     for (const p of this.players) p.update(NO_INPUT);
   }
@@ -151,6 +162,17 @@ export class World {
       }
     }
     for (const marker of this.oblist) if (marker.order === Order.SPECIAL) marker.dead = true;
+    this.cleanup();
+  }
+
+  /** Revisiting a won field: everything but the squad, exits and teleporters is gone. */
+  private clearWonField(): void {
+    const keep = (o: Walker, livingOk: boolean) =>
+      (livingOk && o.order === Order.LIVING) ||
+      o.isType(Order.TREASURE, TreasureFamily.EXIT) ||
+      o.isType(Order.TREASURE, TreasureFamily.TELEPORTER);
+    for (const o of this.oblist) if (!keep(o, o.teamNum === 0 || o.myguy !== null)) o.dead = true;
+    for (const o of [...this.weaplist, ...this.fxlist]) if (!keep(o, o.teamNum === 0)) o.dead = true;
     this.cleanup();
   }
 
@@ -435,9 +457,15 @@ export class World {
 
   /** A player-controlled unit stepped on an exit. */
   reachExit(level: number, who: Walker): void {
-    // Leaving needs the field cleared, unless the scenario allows exiting early.
+    // Leaving needs the field cleared, unless the scenario allows it, or we fall back to a
+    // field we already hold.
     if (this.levelDone === 0 && this.scenarioType !== ScenType.CAN_EXIT) {
-      if (!who.skipExit || who.skipExit === 10) this.notify('Defeat all foes before leaving!', who);
+      if (this.completed.has(level)) {
+        this.events.push({ type: 'exit', level, who: who.id });
+        this.outcome ??= { result: 'retreat', exitTo: level };
+        return;
+      }
+      this.notify('Defeat all foes before leaving!', who);
       return;
     }
     this.events.push({ type: 'exit', level, who: who.id });

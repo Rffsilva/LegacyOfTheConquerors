@@ -7,6 +7,7 @@ import { LivePalette } from '../render/palette.ts';
 import { SpriteBank } from '../render/spriteBank.ts';
 import { IndexedTextures } from '../render/textures.ts';
 import { spriteInfoFromBundle } from '../sim/spriteInfo.ts';
+import { App } from '../game/app.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
 export class BootScene extends Phaser.Scene {
@@ -50,7 +51,7 @@ export class BootScene extends Phaser.Scene {
     });
 
     document.getElementById('loading')?.remove();
-    const initial = new URLSearchParams(location.search).get('scen') ?? 'scen1';
-    this.scene.start('map', { id: scenarios.some((s) => s.id === initial) ? initial : scenarios[0].id });
+    this.scene.stop();
+    new App(this.game).start();
   }
 }
