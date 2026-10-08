@@ -54,6 +54,9 @@ export class MapScene extends Phaser.Scene {
   private hudTimer = 0;
   private playerInput?: PlayerControls;
   private radar?: Radar;
+  private menuOpen = false;
+  /** Whether the battle was running when the menu opened. */
+  private runningBeforeMenu = false;
 
   constructor() {
     super('map');
@@ -61,6 +64,7 @@ export class MapScene extends Phaser.Scene {
 
   init(data: BattleConfig): void {
     this.config = data;
+    this.menuOpen = false;
     this.initialSquad = data.squad.map((g) => g.clone());
     this.running = data.running ?? false;
     this.speed = data.speed ?? this.speed;
@@ -114,6 +118,7 @@ export class MapScene extends Phaser.Scene {
 
     this.playerInput = new PlayerControls(viewerUi().touchRoot);
     this.playerInput.onActivity = () => {
+      if (this.menuOpen) return;
       this.controls?.resumeFollowing();
       if (!this.running && !this.world?.outcome) this.setRunning(true);
     };
@@ -137,6 +142,15 @@ export class MapScene extends Phaser.Scene {
         if (this.world?.outcome || confirm('Abandon this battle? Your team returns as it was before it.')) this.finish();
       },
       finish: () => this.finish(),
+      menuToggled: (open) => {
+        this.menuOpen = open;
+        if (open) {
+          this.runningBeforeMenu = this.running;
+          this.setRunning(false);
+        } else if (this.runningBeforeMenu) {
+          this.setRunning(true);
+        }
+      },
       settings: () => this.pauseFor((resume) => openSettings(resume)),
       help: () => this.pauseFor((resume) => openHelp('controls', resume)),
     });

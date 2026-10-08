@@ -2,6 +2,7 @@ import type { ScenarioAsset, ScenarioSummary } from '../data/assets.ts';
 import { PALETTE, teamColorBase } from '../formats/palette.ts';
 import { settings } from '../game/settings.ts';
 import type { Outcome } from '../sim/world.ts';
+import { h } from './dom.ts';
 
 export interface ViewerActions {
   select(id: string): void;
@@ -15,6 +16,8 @@ export interface ViewerActions {
   finish(): void;
   settings(): void;
   help(): void;
+  /** The battle menu opened or closed; the battle pauses while it's open. */
+  menuToggled(open: boolean): void;
 }
 
 export type BattleMode = 'skirmish' | 'campaign';
@@ -32,42 +35,61 @@ export interface UnitCard {
 const TOAST_MS = 3500;
 const MAX_TOASTS = 4;
 
-
 /**
- * HTML overlay: menus, HUD and touch controls live in the DOM rather than the canvas so they
- * stay crisp, accessible and responsive at any screen size.
+ * HTML overlay: HUD, battle menu and touch controls live in the DOM rather than the canvas so
+ * they stay crisp, accessible and responsive at any screen size. Only a small menu button
+ * sits over the battlefield; everything else is in the menu it opens.
  */
 class ViewerUi {
   readonly root: HTMLElement;
   private readonly picker: HTMLSelectElement;
-  private readonly info: HTMLElement;
+  private readonly menuPanel: HTMLElement;
+  private readonly menuButton: HTMLButtonElement;
+  private readonly briefing: HTMLElement;
   private readonly teams: HTMLElement;
   private readonly card: HTMLElement;
   private readonly toasts: HTMLElement;
   private readonly outcome: HTMLElement;
-  private readonly playButton: HTMLButtonElement;
   private readonly speedButton: HTMLButtonElement;
+  private readonly resumeButton: HTMLButtonElement;
   private readonly specialButton: HTMLElement;
   private scenarios: ScenarioSummary[] = [];
   private actions?: ViewerActions;
   private lastCard = '';
   private mode: BattleMode = 'skirmish';
+  private running = false;
+  /** Whether the battle had started when the menu was opened. */
+  private startedBeforeMenu = false;
 
   constructor(root: HTMLElement) {
     this.root = root;
     root.innerHTML = `
-      <header class="bar">
-        <button class="icon" data-act="menu" aria-label="Menu">☰</button>
-        <button class="icon skirmish-only" data-act="prev" aria-label="Previous scenario">‹</button>
-        <select class="picker skirmish-only" aria-label="Scenario"></select>
-        <div class="field-title campaign-only"></div>
-        <button class="icon skirmish-only" data-act="next" aria-label="Next scenario">›</button>
-        <button class="icon play" data-act="play" aria-label="Start battle">▶</button>
-        <button class="icon speed" data-act="speed" aria-label="Battle speed">1×</button>
-        <button class="icon" data-act="info" aria-label="Briefing and controls" aria-expanded="false">?</button>
-        <button class="icon" data-act="settings" aria-label="Settings">⚙</button>
-      </header>
-      <section class="info" hidden></section>
+      <button class="icon menu-button" data-act="open-menu" aria-label="Battle menu (Esc)" aria-expanded="false" aria-controls="battle-menu">☰</button>
+      <div class="menu-backdrop" data-act="close-menu" hidden></div>
+      <section class="battle-menu" id="battle-menu" aria-label="Battle menu" hidden>
+        <div class="menu-head">
+          <h2 class="field-title"></h2>
+          <button class="icon" data-act="close-menu" aria-label="Close menu">✕</button>
+        </div>
+        <div class="menu-row skirmish-only">
+          <button class="icon" data-act="prev" aria-label="Previous field">‹</button>
+          <select class="picker" aria-label="Field"></select>
+          <button class="icon" data-act="next" aria-label="Next field">›</button>
+        </div>
+        <button class="pill primary resume" data-act="resume">Resume</button>
+        <div class="menu-grid">
+          <button class="pill speed" data-act="speed" aria-label="Battle speed">Speed 1×</button>
+          <button class="pill" data-act="help">📖 Field manual</button>
+          <button class="pill" data-act="settings">⚙ Settings</button>
+          <button class="pill fullscreen-toggle" data-act="fullscreen" hidden>⛶ Full screen</button>
+          <button class="pill skirmish-only" data-act="restart">↺ Restart battle</button>
+          <button class="pill quit" data-act="menu"></button>
+        </div>
+        <details class="briefing" open>
+          <summary>Briefing</summary>
+          <div class="briefing-text"></div>
+        </details>
+      </section>
       <div class="status">
         <div class="teams" aria-label="Units per team"></div>
         <div class="card" hidden></div>
@@ -75,10 +97,7 @@ class ViewerUi {
       <div class="toasts" aria-live="polite"></div>
       <section class="outcome" hidden></section>
       <div class="radar-box">
-        <div class="tool-row">
-          <button class="icon fullscreen-toggle" data-act="fullscreen" aria-label="Full screen" hidden>⛶</button>
-          <button class="icon radar-toggle" data-act="radar" aria-label="Show or hide the radar (M)" aria-pressed="true">◎</button>
-        </div>
+        <button class="icon radar-toggle" data-act="radar" aria-label="Show or hide the radar (M)" aria-pressed="true">◎</button>
         <canvas class="radar" aria-label="Radar: the whole field. Click to look there."></canvas>
       </div>
       <div class="zoom">
@@ -96,44 +115,83 @@ class ViewerUi {
         </div>
       </div>`;
     this.picker = root.querySelector('.picker')!;
-    this.info = root.querySelector('.info')!;
+    this.menuPanel = root.querySelector('.battle-menu')!;
+    this.menuButton = root.querySelector('.menu-button')!;
+    this.briefing = root.querySelector('.briefing-text')!;
     this.teams = root.querySelector('.teams')!;
     this.card = root.querySelector('.card')!;
     this.toasts = root.querySelector('.toasts')!;
     this.outcome = root.querySelector('.outcome')!;
-    this.playButton = root.querySelector('.play')!;
     this.speedButton = root.querySelector('.speed')!;
+    this.resumeButton = root.querySelector('.resume')!;
     this.specialButton = root.querySelector('.tb.special')!;
 
     this.picker.addEventListener('change', () => this.actions?.select(this.picker.value));
     root.addEventListener('click', (e) => {
       const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
-      if (act === 'prev') this.step(-1);
-      else if (act === 'next' || act === 'next-scenario') this.step(1);
-      else if (act === 'zoom-in') this.actions?.zoom(1.25);
-      else if (act === 'zoom-out') this.actions?.zoom(0.8);
-      else if (act === 'info') this.toggleInfo();
-      else if (act === 'play') this.actions?.togglePlay();
-      else if (act === 'speed') this.actions?.cycleSpeed();
-      else if (act === 'restart') this.actions?.restart();
-      else if (act === 'menu') this.actions?.menu();
-      else if (act === 'finish') this.actions?.finish();
-      else if (act === 'radar') settings.update({ radar: !settings.value.radar });
-      else if (act === 'settings') this.actions?.settings();
-      else if (act === 'help') this.actions?.help();
-      else if (act === 'fullscreen') void toggleFullscreen();
+      switch (act) {
+        case 'open-menu':
+          this.setMenuOpen(!this.menuIsOpen());
+          break;
+        case 'close-menu':
+          this.setMenuOpen(false);
+          break;
+        case 'resume':
+          // Closing resumes a running battle; a battle that hadn't started yet starts now.
+          this.setMenuOpen(false);
+          if (!this.startedBeforeMenu) this.actions?.togglePlay();
+          break;
+        case 'prev':
+          this.step(-1);
+          break;
+        case 'next':
+        case 'next-scenario':
+          this.step(1);
+          break;
+        case 'zoom-in':
+          this.actions?.zoom(1.25);
+          break;
+        case 'zoom-out':
+          this.actions?.zoom(0.8);
+          break;
+        case 'speed':
+          this.actions?.cycleSpeed();
+          break;
+        case 'restart':
+          this.closeMenuQuietly();
+          this.actions?.restart();
+          break;
+        case 'menu':
+          this.actions?.menu();
+          break;
+        case 'finish':
+          this.actions?.finish();
+          break;
+        case 'radar':
+          settings.update({ radar: !settings.value.radar });
+          break;
+        case 'settings':
+          this.actions?.settings();
+          break;
+        case 'help':
+          this.actions?.help();
+          break;
+        case 'fullscreen':
+          void toggleFullscreen();
+          break;
+      }
     });
     window.addEventListener('keydown', (e) => {
       if (root.hidden || e.target instanceof HTMLInputElement || document.querySelector('dialog[open]')) return;
-      if (settings.value.keys.radar.includes(e.code)) settings.update({ radar: !settings.value.radar });
-      else if (settings.value.keys.pause.includes(e.code)) this.actions?.togglePlay();
+      if (e.code === 'Escape') this.setMenuOpen(!this.menuIsOpen());
+      else if (settings.value.keys.radar.includes(e.code)) settings.update({ radar: !settings.value.radar });
+      else if (settings.value.keys.pause.includes(e.code) && !this.menuIsOpen()) this.actions?.togglePlay();
     });
     // Full screen hides the browser's address bar on phones (iPhone Safari doesn't support it).
     const fullscreenButton = root.querySelector<HTMLButtonElement>('.fullscreen-toggle')!;
     fullscreenButton.hidden = !document.fullscreenEnabled;
     document.addEventListener('fullscreenchange', () => {
-      fullscreenButton.setAttribute('aria-pressed', String(!!document.fullscreenElement));
-      fullscreenButton.setAttribute('aria-label', document.fullscreenElement ? 'Leave full screen' : 'Full screen');
+      fullscreenButton.textContent = document.fullscreenElement ? '⛶ Leave full screen' : '⛶ Full screen';
     });
     settings.subscribe((s) => {
       this.setRadarVisible(s.radar);
@@ -147,14 +205,39 @@ class ViewerUi {
     return this.root.querySelector('.radar')!;
   }
 
+  /** The container the touch controls live in. */
+  get touchRoot(): HTMLElement {
+    return this.root.querySelector('.touch')!;
+  }
+
   private setRadarVisible(visible: boolean): void {
     this.root.querySelector('.radar-box')!.classList.toggle('collapsed', !visible);
     this.root.querySelector('.radar-toggle')!.setAttribute('aria-pressed', String(visible));
   }
 
-  /** The container the touch controls live in. */
-  get touchRoot(): HTMLElement {
-    return this.root.querySelector('.touch')!;
+  private menuIsOpen(): boolean {
+    return this.menuPanel.hidden === false;
+  }
+
+  private setMenuOpen(open: boolean): void {
+    if (open === this.menuIsOpen()) return;
+    if (open) {
+      this.startedBeforeMenu = this.running;
+      this.resumeButton.textContent = this.running ? 'Resume' : '⚔ Start battle';
+    }
+    this.menuPanel.hidden = !open;
+    this.root.querySelector<HTMLElement>('.menu-backdrop')!.hidden = !open;
+    this.menuButton.setAttribute('aria-expanded', String(open));
+    this.actions?.menuToggled(open);
+    if (open) this.resumeButton.focus();
+    else this.menuButton.focus({ preventScroll: true });
+  }
+
+  /** Hide the menu without resuming (the action that closed it takes over). */
+  private closeMenuQuietly(): void {
+    this.menuPanel.hidden = true;
+    this.root.querySelector<HTMLElement>('.menu-backdrop')!.hidden = true;
+    this.menuButton.setAttribute('aria-expanded', 'false');
   }
 
   setScenarios(scenarios: ScenarioSummary[]): void {
@@ -170,27 +253,17 @@ class ViewerUi {
     this.root.dataset.mode = mode;
     this.picker.value = scenario.id;
     this.root.querySelector('.field-title')!.textContent = titleCase(scenario.title || scenario.id);
+    this.root.querySelector('.quit')!.textContent = mode === 'campaign' ? '🏳 Abandon battle' : '☰ Main menu';
     if (mode === 'skirmish') history.replaceState(null, '', `?scen=${scenario.id}`);
 
-    const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]>) =>
-      Object.assign(document.createElement(tag), props);
-    const manual = el('button', { className: 'pill', textContent: '📖 Field manual: controls, units, items' });
-    manual.dataset.act = 'help';
-    const restart = el('button', { className: 'pill', textContent: mode === 'campaign' ? 'Abandon battle' : 'Restart battle' });
-    restart.dataset.act = mode === 'campaign' ? 'menu' : 'restart';
-
     const paragraphs = reflow(scenario.text);
-    this.info.replaceChildren(
-      el('h2', { textContent: titleCase(scenario.title || scenario.id) }),
-      ...(paragraphs.length ? paragraphs : ['No briefing for this scenario.']).map((text) => el('p', { textContent: text })),
-      el('h3', { textContent: 'How to play' }),
-      el('p', {
-        textContent:
-          'You control one squad member; the others fight on their own. Defeat every enemy, then walk your character onto the exit. Moving or attacking starts the battle. P pauses, M toggles the radar.',
-      }),
-      manual,
-      restart,
+    this.briefing.replaceChildren(
+      ...(paragraphs.length ? paragraphs : ['No briefing for this field.']).map((text) => h('p', {}, text)),
+      h('p', { className: 'hint' },
+        'You control one squad member; the others fight on their own. Defeat every enemy, then walk onto the exit. Moving or attacking starts the battle; Esc or ☰ pauses.',
+      ),
     );
+    this.closeMenuQuietly();
     this.outcome.hidden = true;
     this.toasts.replaceChildren();
     this.lastCard = '';
@@ -200,13 +273,11 @@ class ViewerUi {
   setTeams(counts: ReadonlyMap<number, number>, exitOpen: boolean): void {
     this.teams.replaceChildren(
       ...[...counts].sort(([a], [b]) => a - b).map(([team, n]) => {
-        const chip = document.createElement('span');
-        chip.className = 'chip';
+        const chip = h('span', { className: 'chip' }, `${team === 0 ? 'You' : `Team ${team}`} · ${n}`);
         chip.style.setProperty('--team', `rgb(${PALETTE[teamColorBase(team) + 2].join(' ')})`);
-        chip.textContent = `${team === 0 ? 'You' : `Team ${team}`} · ${n}`;
         return chip;
       }),
-      ...(exitOpen ? [Object.assign(document.createElement('span'), { className: 'chip exit', textContent: 'Field clear · find the exit' })] : []),
+      ...(exitOpen ? [h('span', { className: 'chip exit' }, 'Field clear · find the exit')] : []),
     );
   }
 
@@ -218,49 +289,44 @@ class ViewerUi {
     this.card.hidden = !unit;
     if (!unit) return;
     const meter = (cls: string, value: number, max: number) => {
-      const m = document.createElement('div');
-      m.className = `meter ${cls}`;
+      const m = h('div', { className: `meter ${cls}`, title: `${Math.max(0, value)} / ${max}` });
       m.style.setProperty('--fill', `${Math.max(0, Math.min(1, value / Math.max(max, 1))) * 100}%`);
-      m.title = `${Math.max(0, value)} / ${max}`;
       return m;
     };
     this.card.replaceChildren(
-      Object.assign(document.createElement('div'), { className: 'card-name', textContent: `${titleCase(unit.name)} · Lv ${unit.level}` }),
+      h('div', { className: 'card-name' }, `${titleCase(unit.name)} · Lv ${unit.level}`),
       meter('hp', unit.hp, unit.maxHp),
       meter('mp', unit.mp, unit.maxMp),
-      Object.assign(document.createElement('div'), { className: 'card-special', textContent: `Special: ${titleCase(unit.special)}` }),
+      h('div', { className: 'card-special' }, `Special: ${titleCase(unit.special)}`),
     );
     this.specialButton.textContent = unit.special === 'NONE' ? 'Special' : titleCase(unit.special);
   }
 
   setPlayback(running: boolean, speed: number): void {
-    this.playButton.textContent = running ? '❚❚' : '▶';
-    this.playButton.setAttribute('aria-label', running ? 'Pause battle' : 'Start battle');
-    this.speedButton.textContent = `${speed}×`;
+    this.running = running;
+    this.root.dataset.running = String(running);
+    this.speedButton.textContent = `Speed ${speed}×`;
   }
 
   /** A short battle message, like the original's on-screen text. */
   toast(message: string): void {
-    const el = Object.assign(document.createElement('div'), { className: 'toast', textContent: message });
+    const el = h('div', { className: 'toast' }, message);
     this.toasts.append(el);
     while (this.toasts.children.length > MAX_TOASTS) this.toasts.firstElementChild?.remove();
     setTimeout(() => el.remove(), TOAST_MS);
   }
 
   showOutcome(outcome: Outcome): void {
+    this.closeMenuQuietly();
     const won = outcome.result === 'victory';
     const reason = outcome.result === 'defeat' ? outcome.reason : outcome.result === 'retreat' ? 'You withdrew from the field.' : 'The field is yours.';
-    const button = (text: string, act: string) => {
-      const b = Object.assign(document.createElement('button'), { className: 'pill', textContent: text });
-      b.dataset.act = act;
-      return b;
-    };
-    const actions = Object.assign(document.createElement('div'), { className: 'actions' });
+    const button = (text: string, act: string) => h('button', { className: 'pill', dataset: { act } }, text);
+    const actions = h('div', { className: 'actions' });
     if (this.mode === 'campaign') actions.append(button('Continue', 'finish'));
-    else actions.append(button('Fight again', 'restart'), ...(won ? [button('Next scenario', 'next-scenario')] : []));
+    else actions.append(button('Fight again', 'restart'), ...(won ? [button('Next field', 'next-scenario')] : []), button('Main menu', 'menu'));
     this.outcome.replaceChildren(
-      Object.assign(document.createElement('h2'), { textContent: won ? 'Victory!' : outcome.result === 'retreat' ? 'Withdrawn' : 'Defeat!' }),
-      Object.assign(document.createElement('p'), { textContent: reason }),
+      h('h2', {}, won ? 'Victory!' : outcome.result === 'retreat' ? 'Withdrawn' : 'Defeat!'),
+      h('p', {}, reason),
       actions,
     );
     this.outcome.hidden = false;
@@ -270,12 +336,6 @@ class ViewerUi {
     const i = this.scenarios.findIndex((s) => s.id === this.picker.value);
     const next = this.scenarios[(i + direction + this.scenarios.length) % this.scenarios.length];
     this.actions?.select(next.id);
-  }
-
-  private toggleInfo(): void {
-    const button = this.root.querySelector<HTMLButtonElement>('[data-act="info"]')!;
-    this.info.hidden = !this.info.hidden;
-    button.setAttribute('aria-expanded', String(!this.info.hidden));
   }
 }
 
