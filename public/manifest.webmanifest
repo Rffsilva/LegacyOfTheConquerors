@@ -1,0 +1,10 @@
+{
+  "name": "Legacy of the Conquerors",
+  "short_name": "Conquerors",
+  "description": "A modern browser and mobile remake of OpenGlad.",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#14110f"
+}

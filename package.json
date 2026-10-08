@@ -1,0 +1,33 @@
+{
+  "name": "legacy-of-the-conquerors",
+  "version": "0.1.0",
+  "description": "A modern browser and mobile remake of OpenGlad (Gladiator by FSGames).",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "convert-assets": "node tools/convert-assets.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rffsilva/LegacyOfTheConquerors.git"
+  },
+  "license": "GPL-2.0-or-later",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Rffsilva/LegacyOfTheConquerors/issues"
+  },
+  "homepage": "https://github.com/Rffsilva/LegacyOfTheConquerors#readme",
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
+  },
+  "private": true
+}

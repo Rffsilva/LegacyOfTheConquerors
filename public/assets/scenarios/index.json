@@ -1,0 +1,373 @@
+[
+ {
+  "id": "scen0",
+  "title": "",
+  "version": 5,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen1",
+  "title": "SOUTH OF TALWOOD (BEGINNING)",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen2",
+  "title": "THROUGH TALWOOD FOREST",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen3",
+  "title": "CITY RUINS",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen4",
+  "title": "A GOOEY MESS",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen5",
+  "title": "DEAD AGAIN",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen6",
+  "title": "THE ACCURSED UNDEAD (EASIER)",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen7",
+  "title": "A FLIGHT OF FAERIES",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen8",
+  "title": "THE ENEMY OUTPOST",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen9",
+  "title": "TAKING THE OUTPOST",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen10",
+  "title": "DEFENDING THE KEEP",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen11",
+  "title": "TIC AND TAC (MODERATE)",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen12",
+  "title": "STORMING THE FORTRESS (EASY)",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen13",
+  "title": "THE CASTLE INTERIOR",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen14",
+  "title": "SMELL OF THE DEAD (HARD)",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen15",
+  "title": "BATTLE OF THE SLIME",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen16",
+  "title": "THE DELTA",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen17",
+  "title": "THE CITY OF NUTHRAM",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen18",
+  "title": "JAKARTA'S FOREST",
+  "version": 6,
+  "width": 100,
+  "height": 100
+ },
+ {
+  "id": "scen19",
+  "title": "WESTWOODS FOREST (HARDER)",
+  "version": 6,
+  "width": 60,
+  "height": 58
+ },
+ {
+  "id": "scen20",
+  "title": "THE CLERICS OF WESTWOODS",
+  "version": 6,
+  "width": 60,
+  "height": 60
+ },
+ {
+  "id": "scen21",
+  "title": "CARL THE DRUID",
+  "version": 6,
+  "width": 55,
+  "height": 55
+ },
+ {
+  "id": "scen22",
+  "title": "MAGI TRAINING CENTER",
+  "version": 6,
+  "width": 70,
+  "height": 71
+ },
+ {
+  "id": "scen23",
+  "title": "DUNGEON OF STARS (DEAD-END)",
+  "version": 6,
+  "width": 70,
+  "height": 70
+ },
+ {
+  "id": "scen24",
+  "title": "THE WESTWOOD GARDENS",
+  "version": 6,
+  "width": 90,
+  "height": 90
+ },
+ {
+  "id": "scen25",
+  "title": "THE LAGAREN BATTLEGROUND",
+  "version": 6,
+  "width": 90,
+  "height": 90
+ },
+ {
+  "id": "scen30",
+  "title": "LORD JAKARTA'S GATES (HARD!)",
+  "version": 6,
+  "width": 90,
+  "height": 120
+ },
+ {
+  "id": "scen35",
+  "title": "CENTWHEIT MANOR",
+  "version": 6,
+  "width": 50,
+  "height": 50
+ },
+ {
+  "id": "scen36",
+  "title": "AN UNDERGROUND PASSAGE",
+  "version": 6,
+  "width": 60,
+  "height": 20
+ },
+ {
+  "id": "scen37",
+  "title": "DUNGEON OF CENTWHEIT MANOR",
+  "version": 6,
+  "width": 30,
+  "height": 40
+ },
+ {
+  "id": "scen38",
+  "title": "SOUTHEAST CASTLE CORNER",
+  "version": 6,
+  "width": 30,
+  "height": 40
+ },
+ {
+  "id": "scen39",
+  "title": "INSIDE CENTWHEIT MANOR",
+  "version": 6,
+  "width": 80,
+  "height": 60
+ },
+ {
+  "id": "scen40",
+  "title": "CENTWHEIT MANOR",
+  "version": 6,
+  "width": 50,
+  "height": 50
+ },
+ {
+  "id": "scen41",
+  "title": "NYLWIN TOWN (HARD)",
+  "version": 6,
+  "width": 80,
+  "height": 60
+ },
+ {
+  "id": "scen42",
+  "title": "A BORDER FORT",
+  "version": 6,
+  "width": 30,
+  "height": 30
+ },
+ {
+  "id": "scen43",
+  "title": "THE FORESTERS",
+  "version": 6,
+  "width": 80,
+  "height": 60
+ },
+ {
+  "id": "scen44",
+  "title": "THE FORESTERS",
+  "version": 6,
+  "width": 80,
+  "height": 60
+ },
+ {
+  "id": "scen45",
+  "title": "LAKE TACONA",
+  "version": 6,
+  "width": 80,
+  "height": 60
+ },
+ {
+  "id": "scen80",
+  "title": "",
+  "version": 5,
+  "width": 20,
+  "height": 20
+ },
+ {
+  "id": "scen81",
+  "title": "",
+  "version": 5,
+  "width": 20,
+  "height": 20
+ },
+ {
+  "id": "scen82",
+  "title": "",
+  "version": 5,
+  "width": 20,
+  "height": 20
+ },
+ {
+  "id": "scen83",
+  "title": "",
+  "version": 5,
+  "width": 20,
+  "height": 20
+ },
+ {
+  "id": "scen84",
+  "title": "",
+  "version": 5,
+  "width": 20,
+  "height": 20
+ },
+ {
+  "id": "scen88",
+  "title": "",
+  "version": 5,
+  "width": 70,
+  "height": 70
+ },
+ {
+  "id": "scen99",
+  "title": "none",
+  "version": 6,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "scen300",
+  "title": "'ROUND THE CIRCLE",
+  "version": 8,
+  "width": 60,
+  "height": 60
+ },
+ {
+  "id": "scen301",
+  "title": "A FOREST BATTLE",
+  "version": 8,
+  "width": 60,
+  "height": 60
+ },
+ {
+  "id": "scen302",
+  "title": "ISLAND TO ISLAND",
+  "version": 8,
+  "width": 80,
+  "height": 80
+ },
+ {
+  "id": "scen303",
+  "title": "GATEKEEPERS",
+  "version": 8,
+  "width": 80,
+  "height": 80
+ },
+ {
+  "id": "scen304",
+  "title": "THE CASTLE",
+  "version": 8,
+  "width": 60,
+  "height": 60
+ },
+ {
+  "id": "scen305",
+  "title": "BULLSEYE",
+  "version": 8,
+  "width": 60,
+  "height": 60
+ },
+ {
+  "id": "scenx",
+  "title": "",
+  "version": 5,
+  "width": 40,
+  "height": 60
+ },
+ {
+  "id": "test",
+  "title": "",
+  "version": 5,
+  "width": 40,
+  "height": 60
+ }
+]
