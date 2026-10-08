@@ -1,6 +1,7 @@
-import { SPRITE_FILES, Order } from '../data/objects.ts';
+import { Order } from '../data/objects.ts';
 import { PALETTE, resolveSpriteIndex } from '../formats/palette.ts';
 import { pixFrame } from '../formats/pix.ts';
+import { spriteForObject } from '../render/objectSprites.ts';
 import type { SpriteBank } from '../render/spriteBank.ts';
 
 /** Walking toward the viewer: loader.cpp's "down" walk cycle. */
@@ -10,7 +11,7 @@ const FRAME_MS = 160;
 const active = new Set<SpritePreview>();
 let timer: number | null = null;
 
-/** An animated, team-coloured unit portrait for the DOM menus. */
+/** An animated, team-coloured portrait of a unit (or a still item) for the DOM menus. */
 export class SpritePreview {
   readonly canvas: HTMLCanvasElement;
   private readonly bank: SpriteBank;
@@ -18,11 +19,13 @@ export class SpritePreview {
   private team: number;
   private step = 0;
   private attached = false;
+  private readonly order: number;
 
-  constructor(bank: SpriteBank, family: number, team = 0, scale = 3) {
+  constructor(bank: SpriteBank, family: number, team = 0, scale = 3, order: number = Order.LIVING) {
     this.bank = bank;
     this.family = family;
     this.team = team;
+    this.order = order;
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'sprite';
     this.canvas.dataset.scale = String(scale);
@@ -57,11 +60,12 @@ export class SpritePreview {
   }
 
   private draw(): void {
-    const name = SPRITE_FILES[Order.LIVING]?.[this.family];
-    if (!name || !this.bank.has(name)) return;
-    const pix = this.bank.get(name);
+    const sprite = spriteForObject({ order: this.order, family: this.family, facing: 4 });
+    if (!sprite || !this.bank.has(sprite.name)) return;
+    const pix = this.bank.get(sprite.name);
     const scale = Number(this.canvas.dataset.scale);
-    const frame = pixFrame(pix, pix.frames > 8 ? WALK_DOWN[this.step] : 0);
+    const walks = this.order === Order.LIVING && pix.frames > 8;
+    const frame = pixFrame(pix, walks ? WALK_DOWN[this.step] : sprite.frame);
     this.canvas.width = pix.width;
     this.canvas.height = pix.height;
     this.canvas.style.width = `${pix.width * scale}px`;

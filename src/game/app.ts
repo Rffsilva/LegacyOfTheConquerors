@@ -1,9 +1,11 @@
 import type Phaser from 'phaser';
+import { music } from '../audio/music.ts';
 import { LivingFamily } from '../data/objects.ts';
 import type { BattleConfig } from '../scenes/MapScene.ts';
 import { Guy } from '../sim/guy.ts';
 import type { World } from '../sim/world.ts';
 import { Screens } from '../ui/screens.ts';
+import { openHelp } from '../ui/helpDialog.ts';
 import { openSettings } from '../ui/settingsDialog.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 import { applyBattle, newCampaign, squadFor, type Campaign } from './campaign.ts';
@@ -33,6 +35,7 @@ export class App {
 
   menu(): void {
     this.leaveBattle();
+    music.play('menu');
     history.replaceState(null, '', location.pathname);
     this.screens.showMenu(
       {
@@ -44,6 +47,7 @@ export class App {
         },
         skirmish: () => this.skirmish(),
         settings: () => openSettings(),
+        help: () => openHelp('basics'),
       },
       this.campaign,
     );
@@ -53,11 +57,13 @@ export class App {
     const campaign = this.campaign;
     if (!campaign) return this.menu();
     this.leaveBattle();
+    music.play('menu');
     this.screens.showBarracks(
       campaign,
       {
         changed: () => this.save(),
         settings: () => openSettings(),
+        help: () => openHelp('units'),
         menu: () => this.menu(),
         fight: (n) => this.fight(n),
       },
@@ -104,6 +110,7 @@ export class App {
 
   private startBattle(config: BattleConfig): void {
     this.screens.hide();
+    music.play('battle');
     viewerUi().root.hidden = false;
     if (this.game.scene.isActive('map')) this.game.scene.stop('map');
     this.game.scene.start('map', config);

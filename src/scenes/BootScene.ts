@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { ScenarioSummary, SpriteIndex } from '../data/assets.ts';
+import { music } from '../audio/music.ts';
 import { setServices } from '../game/services.ts';
 import { settings } from '../game/settings.ts';
 import { SOUND_FILES, soundKey } from '../game/sounds.ts';
@@ -54,6 +55,7 @@ export class BootScene extends Phaser.Scene {
     settings.subscribe((s) => {
       this.game.sound.volume = s.volume;
       this.game.sound.mute = s.muted;
+      music.setVolume(s.muted ? 0 : s.musicVolume);
       // The original's brightness steps lightened or darkened the whole palette.
       document.getElementById('game')?.style.setProperty('--brightness', String(1 + s.brightness * 0.08));
     });

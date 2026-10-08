@@ -4,6 +4,7 @@ import { Order } from '../data/objects.ts';
 import { GRID_SIZE } from '../data/tiles.ts';
 import { services } from '../game/services.ts';
 import { soundKey } from '../game/sounds.ts';
+import { music } from '../audio/music.ts';
 import { settings, tickMs } from '../game/settings.ts';
 import { CameraControls } from '../input/cameraControls.ts';
 import { PlayerControls } from '../input/playerControls.ts';
@@ -12,8 +13,9 @@ import { WorldRenderer } from '../render/worldRenderer.ts';
 import type { Guy } from '../sim/guy.ts';
 import { specialName } from '../sim/specialNames.ts';
 import { NO_INPUT } from '../sim/player.ts';
-import { World } from '../sim/world.ts';
+import { World, type Outcome } from '../sim/world.ts';
 import { Radar } from '../ui/radar.ts';
+import { openHelp } from '../ui/helpDialog.ts';
 import { openSettings } from '../ui/settingsDialog.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
@@ -122,17 +124,17 @@ export class MapScene extends Phaser.Scene {
       zoom: (factor) => this.controls?.zoomBy(factor),
       togglePlay: () => this.setRunning(!this.running),
       cycleSpeed: () => this.cycleSpeed(),
-      restart: () => this.scene.restart({ ...this.config, squad: this.freshSquad(), running: true, speed: this.speed }),
+      restart: () => {
+        music.play('battle', true);
+        this.scene.restart({ ...this.config, squad: this.freshSquad(), running: true, speed: this.speed });
+      },
       menu: () => {
         if (!campaign) return this.config.menu?.();
         if (this.world?.outcome || confirm('Abandon this battle? Your team returns as it was before it.')) this.finish();
       },
       finish: () => this.finish(),
-      settings: () => {
-        const wasRunning = this.running;
-        this.setRunning(false);
-        openSettings(() => wasRunning && this.setRunning(true));
-      },
+      settings: () => this.pauseFor((resume) => openSettings(resume)),
+      help: () => this.pauseFor((resume) => openHelp('controls', resume)),
     });
     this.updateHud();
   }
@@ -154,9 +156,12 @@ export class MapScene extends Phaser.Scene {
         ticks++;
       }
       if (ticks === MAX_TICKS_PER_FRAME) this.accumulator = 0;
-      if (world.outcome) {
+      // Read afresh: TypeScript can't see that tick() may have ended the battle.
+      const outcome: Outcome | null = this.world!.outcome;
+      if (outcome) {
         this.running = false;
-        viewerUi().showOutcome(world.outcome);
+        music.play(outcome.result === 'victory' ? 'victory' : 'defeat');
+        viewerUi().showOutcome(outcome);
       }
     }
     // The HUD and radar refresh on a timer, so they also follow the camera while paused.
@@ -177,6 +182,13 @@ export class MapScene extends Phaser.Scene {
     this.running = running;
     this.accumulator = 0;
     viewerUi().setPlayback(this.running, this.speed);
+  }
+
+  /** Pauses while a dialog is open, resuming afterwards if the battle was running. */
+  private pauseFor(open: (resume: () => void) => void): void {
+    const wasRunning = this.running;
+    this.setRunning(false);
+    open(() => wasRunning && this.setRunning(true));
   }
 
   private cycleSpeed(): void {

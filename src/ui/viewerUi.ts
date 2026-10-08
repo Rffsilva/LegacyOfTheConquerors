@@ -14,6 +14,7 @@ export interface ViewerActions {
   /** Campaign: continue to the battle report. */
   finish(): void;
   settings(): void;
+  help(): void;
 }
 
 export type BattleMode = 'skirmish' | 'campaign';
@@ -31,19 +32,6 @@ export interface UnitCard {
 const TOAST_MS = 3500;
 const MAX_TOASTS = 4;
 
-const CONTROLS_HELP = [
-  ['Move', 'WASD / arrows · left stick'],
-  ['Attack', 'Space (hold) · A'],
-  ['Special', 'E · B'],
-  ['Next special', 'Q · LB'],
-  ['Alternate special', 'hold Shift · RB'],
-  ['Switch character', 'Tab · X'],
-  ['Call squad ("Yo!")', 'F · Y'],
-  ['Squad defend on/off', 'Shift + F'],
-  ['Pause', 'P'],
-  ['Radar on/off', 'M'],
-  ['Change keys, speed, sound…', '⚙ Settings'],
-];
 
 /**
  * HTML overlay: menus, HUD and touch controls live in the DOM rather than the canvas so they
@@ -129,6 +117,7 @@ class ViewerUi {
       else if (act === 'finish') this.actions?.finish();
       else if (act === 'radar') settings.update({ radar: !settings.value.radar });
       else if (act === 'settings') this.actions?.settings();
+      else if (act === 'help') this.actions?.help();
     });
     window.addEventListener('keydown', (e) => {
       if (root.hidden || e.target instanceof HTMLInputElement || document.querySelector('dialog[open]')) return;
@@ -174,8 +163,8 @@ class ViewerUi {
 
     const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]>) =>
       Object.assign(document.createElement(tag), props);
-    const help = el('dl', { className: 'help' });
-    for (const [action, keys] of CONTROLS_HELP) help.append(el('dt', { textContent: action }), el('dd', { textContent: keys }));
+    const manual = el('button', { className: 'pill', textContent: '📖 Field manual: controls, units, items' });
+    manual.dataset.act = 'help';
     const restart = el('button', { className: 'pill', textContent: mode === 'campaign' ? 'Abandon battle' : 'Restart battle' });
     restart.dataset.act = mode === 'campaign' ? 'menu' : 'restart';
 
@@ -186,9 +175,9 @@ class ViewerUi {
       el('h3', { textContent: 'How to play' }),
       el('p', {
         textContent:
-          'You control one squad member; the others fight on their own. Defeat every enemy, then walk your character onto the exit. Moving or attacking starts the battle.',
+          'You control one squad member; the others fight on their own. Defeat every enemy, then walk your character onto the exit. Moving or attacking starts the battle. P pauses, M toggles the radar.',
       }),
-      help,
+      manual,
       restart,
     );
     this.outcome.hidden = true;

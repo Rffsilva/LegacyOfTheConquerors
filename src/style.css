@@ -163,22 +163,6 @@ select:focus-visible {
   color: var(--muted);
 }
 
-.help {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 14px;
-  margin: 0 0 14px;
-  font-size: 0.85rem;
-}
-
-.help dt {
-  color: var(--text);
-}
-
-.help dd {
-  margin: 0;
-  color: var(--muted);
-}
 
 /* --- Status: team counts and the controlled unit ----------------------------- */
 
@@ -1010,4 +994,113 @@ dialog.settings h3 {
   .keyrow {
     grid-template-columns: 1fr 80px 80px;
   }
+}
+
+/* --- Field manual ------------------------------------------------------------------ */
+
+dialog.help {
+  width: min(720px, calc(100vw - 24px));
+}
+
+dialog.help .tabs {
+  position: sticky;
+  top: 69px;
+  z-index: 1;
+  padding: 10px 16px;
+  background: var(--bg);
+  border-bottom: 1px solid rgb(214 170 92 / 0.12);
+}
+
+.help-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.help-body p,
+.help-body li {
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.help-body p {
+  margin: 0 0 0.6em;
+}
+
+.help-body ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.help-unit {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgb(214 170 92 / 0.12);
+}
+
+.help-unit.item {
+  grid-template-columns: 40px 1fr;
+  align-items: center;
+}
+
+.help-unit canvas {
+  justify-self: center;
+}
+
+.help-unit h3 {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.help-unit.item p {
+  margin: 0;
+}
+
+.help-specials {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.help-specials li {
+  margin-bottom: 4px;
+}
+
+.help-specials strong {
+  color: var(--text);
+}
+
+.help-specials .alt {
+  margin-top: 2px;
+  font-size: 0.9em;
+}
+
+.tag {
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 0.72rem;
+  font-weight: normal;
+  vertical-align: middle;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.help-keys {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 10px;
+}
+
+.help-keys dt {
+  color: var(--text);
+}
+
+.help-keys dd {
+  margin: 0;
+  color: var(--muted);
 }

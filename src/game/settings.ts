@@ -33,7 +33,10 @@ export const KEY_ACTIONS: readonly { action: KeyAction; label: string }[] = [
 ];
 
 export interface Settings {
+  /** Sound effects volume, 0..1. */
   volume: number;
+  /** Music volume, 0..1. */
+  musicVolume: number;
   muted: boolean;
   /** The original's speed scale, 1 (slowest) to 11 (fastest); 8 is its default. */
   gameSpeed: number;
@@ -67,6 +70,7 @@ export const DEFAULT_KEYS: Record<KeyAction, string[]> = {
 
 export const DEFAULT_SETTINGS: Settings = {
   volume: 0.7,
+  musicVolume: 0.5,
   muted: false,
   gameSpeed: 8,
   brightness: 0,
