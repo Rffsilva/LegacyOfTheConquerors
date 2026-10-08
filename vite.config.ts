@@ -41,7 +41,7 @@ function serviceWorker(): Plugin {
 }
 
 export default defineConfig({
-  // Relative base so the build works from any static host and inside a Capacitor shell.
+  // Relative base so the build works from any static host or sub-path (e.g. GitHub Pages).
   base: './',
   build: {
     target: 'es2022',

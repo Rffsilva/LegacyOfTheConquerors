@@ -85,7 +85,7 @@ tests/         Vitest suites
 2. ~~Combat engine, player control and special abilities~~
 3. ~~Campaign: recruiting, training, rewards and saving~~
 4. ~~**Presentation.** Radar, settings, music, field manual~~
-5. **Ship it.** ~~Installable offline web app~~, then iOS and Android builds via Capacitor.
+5. ~~**Ship it.** Installable offline web app for desktop and mobile browsers~~
 
 ## License and credits
 
