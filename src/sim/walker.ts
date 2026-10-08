@@ -1096,7 +1096,7 @@ export class Walker {
     return 0;
   }
 
-  /** Special abilities (walker::special). Not ported yet; the AI simply skips them. */
+  /** Special abilities (walker::special); only livings have any, see specials.ts. */
   special(): number {
     return 0;
   }

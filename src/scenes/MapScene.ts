@@ -159,6 +159,8 @@ export class MapScene extends Phaser.Scene {
         }
       } else if (event.type === 'message' || event.type === 'notify') {
         viewerUi().toast(event.message);
+      } else if (event.type === 'freeze') {
+        viewerUi().toast('TIME IS FROZEN!');
       } else if (event.type === 'exit') {
         viewerUi().toast('The way out is open.');
       }
@@ -174,6 +176,8 @@ export class MapScene extends Phaser.Scene {
       if (!ob.dead && ob.order === Order.LIVING) counts.set(ob.teamNum, (counts.get(ob.teamNum) ?? 0) + 1);
     }
     viewerUi().setTeams(counts, world.levelDone === 1);
+    // The original swapped to a blue palette while enemies were frozen.
+    document.getElementById('game')?.classList.toggle('frozen', world.enemyFreeze > 0);
     const c = world.players[0]?.control;
     viewerUi().setUnit(
       c && !c.dead

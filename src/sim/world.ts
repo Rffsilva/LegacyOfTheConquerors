@@ -28,7 +28,8 @@ export type WorldEvent =
   | { type: 'sound'; sound: string; x: number; y: number }
   | { type: 'notify'; message: string; who: number }
   | { type: 'message'; message: string }
-  | { type: 'exit'; level: number; who: number };
+  | { type: 'exit'; level: number; who: number }
+  | { type: 'freeze'; ticks: number };
 
 export type Outcome = { result: 'victory'; exitTo?: number } | { result: 'defeat'; reason: string };
 

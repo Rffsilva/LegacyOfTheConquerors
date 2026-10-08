@@ -40,6 +40,10 @@ body {
   display: block;
 }
 
+#game.frozen canvas {
+  filter: grayscale(0.7) sepia(0.3) hue-rotate(180deg) saturate(2.2) brightness(0.9);
+}
+
 #loading {
   position: fixed;
   inset: 0;

@@ -6,6 +6,7 @@ import { Act, Action, Ani, Bit, Command, Genre, GRID_SIZE, MAXOBS, REGEN } from 
 import { idiv } from './math.ts';
 import { isAutoAttackable } from './obmap.ts';
 import { specialName } from './specialNames.ts';
+import { performSpecial } from './specials.ts';
 import { Walker } from './walker.ts';
 
 export class Living extends Walker {
@@ -165,6 +166,10 @@ export class Living extends Walker {
       default:
         return 0;
     }
+  }
+
+  override special(): number {
+    return performSpecial(this);
   }
 
   private die(): number {
