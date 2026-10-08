@@ -1,5 +1,8 @@
 # Legacy of the Conquerors
 
+**▶ Play now: [rffsilva.github.io/LegacyOfTheConquerors](https://rffsilva.github.io/LegacyOfTheConquerors/)**
+(works in any modern browser, on desktop and phones; install it from the main menu to play offline)
+
 A modern remake of [OpenGlad](https://github.com/openglad/openglad) — the open-source port of
 FSGames' *Gladiator* — that runs in the browser and on phones. It keeps the original units, combat,
 campaign and team-building, and adds a modern UI, touch controls and responsive scaling.
