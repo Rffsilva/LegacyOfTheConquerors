@@ -80,6 +80,10 @@ class ViewerUi {
       </div>
       <div class="toasts" aria-live="polite"></div>
       <section class="outcome" hidden></section>
+      <div class="radar-box">
+        <button class="icon radar-toggle" data-act="radar" aria-label="Show or hide the radar (M)" aria-pressed="true">◎</button>
+        <canvas class="radar" aria-label="Radar: the whole field. Click to look there."></canvas>
+      </div>
       <div class="zoom">
         <button class="icon" data-act="zoom-in" aria-label="Zoom in">+</button>
         <button class="icon" data-act="zoom-out" aria-label="Zoom out">−</button>
@@ -117,7 +121,26 @@ class ViewerUi {
       else if (act === 'restart') this.actions?.restart();
       else if (act === 'menu') this.actions?.menu();
       else if (act === 'finish') this.actions?.finish();
+      else if (act === 'radar') this.toggleRadar();
     });
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyM' && !root.hidden && !(e.target instanceof HTMLInputElement)) this.toggleRadar();
+    });
+    this.setRadarVisible(readPreference('radar') !== 'off');
+  }
+
+  get radarCanvas(): HTMLCanvasElement {
+    return this.root.querySelector('.radar')!;
+  }
+
+  private toggleRadar(): void {
+    this.setRadarVisible(this.root.querySelector('.radar-box')!.classList.contains('collapsed'));
+  }
+
+  private setRadarVisible(visible: boolean): void {
+    this.root.querySelector('.radar-box')!.classList.toggle('collapsed', !visible);
+    this.root.querySelector('.radar-toggle')!.setAttribute('aria-pressed', String(visible));
+    writePreference('radar', visible ? 'on' : 'off');
   }
 
   /** The container the touch controls live in. */
@@ -260,6 +283,23 @@ function reflow(lines: string[]): string[] {
     }
   }
   return paragraphs;
+}
+
+/** Per-browser UI preferences; storage may be unavailable, which just means defaults. */
+function readPreference(key: string): string | null {
+  try {
+    return localStorage.getItem(`lotc.pref.${key}`);
+  } catch {
+    return null;
+  }
+}
+
+function writePreference(key: string, value: string): void {
+  try {
+    localStorage.setItem(`lotc.pref.${key}`, value);
+  } catch {
+    // not saved; fine
+  }
 }
 
 function titleCase(s: string): string {

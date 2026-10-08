@@ -13,6 +13,7 @@ import type { Guy } from '../sim/guy.ts';
 import { specialName } from '../sim/specialNames.ts';
 import { NO_INPUT } from '../sim/player.ts';
 import { World } from '../sim/world.ts';
+import { Radar } from '../ui/radar.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
 export interface BattleConfig {
@@ -48,6 +49,7 @@ export class MapScene extends Phaser.Scene {
   private speed = 1;
   private hudTimer = 0;
   private playerInput?: PlayerControls;
+  private radar?: Radar;
 
   constructor() {
     super('map');
@@ -102,6 +104,10 @@ export class MapScene extends Phaser.Scene {
     if (control) this.controls.centerOn(control.xpos, control.ypos);
     else this.controls.centerOn(...this.squadCentre(width * GRID_SIZE, height * GRID_SIZE));
 
+    this.radar = new Radar(viewerUi().radarCanvas, services().bank);
+    this.radar.onPick = (x, y) => this.controls?.lookAt(x, y);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.radar && (this.radar.onPick = undefined));
+
     this.playerInput = new PlayerControls(viewerUi().touchRoot);
     this.playerInput.onActivity = () => {
       this.controls?.resumeFollowing();
@@ -145,11 +151,12 @@ export class MapScene extends Phaser.Scene {
         this.running = false;
         viewerUi().showOutcome(world.outcome);
       }
-      this.hudTimer += delta;
-      if (this.hudTimer > 120) {
-        this.hudTimer = 0;
-        this.updateHud();
-      }
+    }
+    // The HUD and radar refresh on a timer, so they also follow the camera while paused.
+    this.hudTimer += delta;
+    if (this.hudTimer > 120) {
+      this.hudTimer = 0;
+      this.updateHud();
     }
     view.draw(this.running ? this.accumulator / TICK_MS : 1);
 
@@ -200,6 +207,9 @@ export class MapScene extends Phaser.Scene {
       if (!ob.dead && ob.order === Order.LIVING) counts.set(ob.teamNum, (counts.get(ob.teamNum) ?? 0) + 1);
     }
     viewerUi().setTeams(counts, world.levelDone === 1);
+    const control = world.players[0]?.control ?? null;
+    const cam = this.cameras.main.worldView;
+    this.radar?.draw(world, control, { x: cam.x, y: cam.y, width: cam.width, height: cam.height });
     // The original swapped to a blue palette while enemies were frozen.
     document.getElementById('game')?.classList.toggle('frozen', world.enemyFreeze > 0);
     const c = world.players[0]?.control;

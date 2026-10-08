@@ -809,3 +809,44 @@ canvas.sprite {
 .fallen {
   color: #f0b4ac !important;
 }
+
+/* --- Radar ----------------------------------------------------------------------- */
+
+.radar-box {
+  position: absolute;
+  top: calc(60px + var(--safe-top));
+  right: calc(8px + var(--safe-right));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.radar {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 34vw;
+  max-height: 32vh;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #000;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.radar-box.collapsed .radar {
+  display: none;
+}
+
+.radar-toggle {
+  order: -1;
+}
+
+@media (pointer: coarse) {
+  .radar {
+    max-width: 30vw;
+    max-height: 24vh;
+  }
+}

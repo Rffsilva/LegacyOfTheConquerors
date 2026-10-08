@@ -69,6 +69,12 @@ export class CameraControls {
     cam.centerOn(cx + (x - cx) * t, cy + (y - cy) * t);
   }
 
+  /** Jump to a spot chosen by the user (e.g. on the minimap), pausing following for a moment. */
+  lookAt(x: number, y: number): void {
+    this.lastManual = this.scene.time.now;
+    this.cam.centerOn(x, y);
+  }
+
   /** Resume following straight away (e.g. when the player moves). */
   resumeFollowing(): void {
     this.lastManual = -Infinity;
