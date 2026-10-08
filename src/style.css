@@ -19,6 +19,7 @@
 
 html,
 body {
+  -webkit-touch-callout: none;
   margin: 0;
   height: 100%;
   overflow: hidden;
@@ -852,7 +853,9 @@ canvas.sprite {
   display: none;
 }
 
-.radar-toggle {
+.tool-row {
+  display: flex;
+  gap: 6px;
   order: -1;
 }
 
@@ -1121,4 +1124,80 @@ dialog.help .tabs {
   border: 1px solid var(--accent);
   border-radius: 999px;
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.5);
+}
+
+/* --- Phone-sized screens ------------------------------------------------------------- */
+
+@media (max-width: 520px) {
+  /* The field picker needs the room; the arrows are a convenience. */
+  .bar [data-act='prev'],
+  .bar [data-act='next'] {
+    display: none;
+  }
+
+  /* Messages go above the touch controls instead of over the HUD. */
+  .toasts {
+    top: auto;
+    bottom: calc(190px + var(--safe-bottom));
+    width: calc(100vw - 32px);
+  }
+
+  .card {
+    width: 150px;
+  }
+}
+
+@media (max-width: 400px) {
+  .stick {
+    width: 112px;
+    height: 112px;
+  }
+
+  .stick-knob {
+    inset: 32px;
+  }
+
+  .buttons {
+    gap: 6px;
+  }
+
+  .tb.small {
+    width: 48px;
+  }
+
+  .tb.special {
+    max-width: 110px;
+    padding: 0 10px;
+  }
+
+  .tb.fire {
+    width: 76px;
+    height: 76px;
+  }
+}
+
+/* Short landscape phones: keep the HUD compact so the field stays visible. */
+@media (max-height: 460px) {
+  .status {
+    top: calc(56px + var(--safe-top));
+  }
+
+  .card {
+    padding: 6px 8px;
+  }
+
+  .radar-box {
+    top: calc(56px + var(--safe-top));
+  }
+
+  /* Stays clear of the touch buttons in the bottom corner. */
+  .radar {
+    max-height: 28vh;
+  }
+
+  .toasts {
+    top: calc(56px + var(--safe-top));
+    bottom: auto;
+    width: min(44vw, 360px);
+  }
 }

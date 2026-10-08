@@ -75,7 +75,10 @@ class ViewerUi {
       <div class="toasts" aria-live="polite"></div>
       <section class="outcome" hidden></section>
       <div class="radar-box">
-        <button class="icon radar-toggle" data-act="radar" aria-label="Show or hide the radar (M)" aria-pressed="true">◎</button>
+        <div class="tool-row">
+          <button class="icon fullscreen-toggle" data-act="fullscreen" aria-label="Full screen" hidden>⛶</button>
+          <button class="icon radar-toggle" data-act="radar" aria-label="Show or hide the radar (M)" aria-pressed="true">◎</button>
+        </div>
         <canvas class="radar" aria-label="Radar: the whole field. Click to look there."></canvas>
       </div>
       <div class="zoom">
@@ -118,11 +121,19 @@ class ViewerUi {
       else if (act === 'radar') settings.update({ radar: !settings.value.radar });
       else if (act === 'settings') this.actions?.settings();
       else if (act === 'help') this.actions?.help();
+      else if (act === 'fullscreen') void toggleFullscreen();
     });
     window.addEventListener('keydown', (e) => {
       if (root.hidden || e.target instanceof HTMLInputElement || document.querySelector('dialog[open]')) return;
       if (settings.value.keys.radar.includes(e.code)) settings.update({ radar: !settings.value.radar });
       else if (settings.value.keys.pause.includes(e.code)) this.actions?.togglePlay();
+    });
+    // Full screen hides the browser's address bar on phones (iPhone Safari doesn't support it).
+    const fullscreenButton = root.querySelector<HTMLButtonElement>('.fullscreen-toggle')!;
+    fullscreenButton.hidden = !document.fullscreenEnabled;
+    document.addEventListener('fullscreenchange', () => {
+      fullscreenButton.setAttribute('aria-pressed', String(!!document.fullscreenElement));
+      fullscreenButton.setAttribute('aria-label', document.fullscreenElement ? 'Leave full screen' : 'Full screen');
     });
     settings.subscribe((s) => {
       this.setRadarVisible(s.radar);
@@ -281,6 +292,15 @@ function reflow(lines: string[]): string[] {
     }
   }
   return paragraphs;
+}
+
+async function toggleFullscreen(): Promise<void> {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+  } catch {
+    // refused (e.g. not from a user gesture); nothing to do
+  }
 }
 
 function titleCase(s: string): string {

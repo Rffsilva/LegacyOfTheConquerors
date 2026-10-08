@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import type { ScenarioSummary, SpriteIndex } from '../data/assets.ts';
 import { music } from '../audio/music.ts';
+import { SOUND_FILES, soundKey } from '../game/sounds.ts';
 import { setServices } from '../game/services.ts';
 import { settings } from '../game/settings.ts';
-import { SOUND_FILES, soundKey } from '../game/sounds.ts';
 import { PALETTE_CYCLE_MS } from '../game/timing.ts';
 import { LivePalette } from '../render/palette.ts';
 import { SpriteBank } from '../render/spriteBank.ts';
@@ -22,7 +22,6 @@ export class BootScene extends Phaser.Scene {
     this.load.binary('sprites-bin', 'sprites.bin');
     this.load.json('sprites-index', 'sprites.json');
     this.load.json('scenario-index', 'scenarios/index.json');
-    for (const [name, file] of Object.entries(SOUND_FILES)) this.load.audio(soundKey(name), `sound/${file}`);
 
     const status = document.getElementById('loading');
     this.load.on(Phaser.Loader.Events.PROGRESS, (p: number) => {
@@ -62,6 +61,22 @@ export class BootScene extends Phaser.Scene {
 
     document.getElementById('loading')?.remove();
     this.scene.stop();
+    // Sound effects load in the background: some mobile browsers hold audio decoding until
+    // the first tap, and the game shouldn't wait on that.
+    this.scene.launch('sounds');
     new App(this.game).start();
+  }
+}
+
+/** Loads the sound effects without blocking the game; MapScene skips any not loaded yet. */
+export class SoundLoaderScene extends Phaser.Scene {
+  constructor() {
+    super('sounds');
+  }
+
+  create(): void {
+    this.load.setPath('assets');
+    for (const [name, file] of Object.entries(SOUND_FILES)) this.load.audio(soundKey(name), `sound/${file}`);
+    this.load.start();
   }
 }

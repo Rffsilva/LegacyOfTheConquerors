@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BootScene } from './scenes/BootScene.ts';
+import { BootScene, SoundLoaderScene } from './scenes/BootScene.ts';
 import { MapScene } from './scenes/MapScene.ts';
 import './style.css';
 
@@ -17,6 +17,6 @@ new Phaser.Game({
     min: { width: 320, height: 200 },
   },
   input: { activePointers: 2 },
-  scene: [BootScene, MapScene],
+  scene: [BootScene, MapScene, SoundLoaderScene],
 });
 

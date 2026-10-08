@@ -6,6 +6,7 @@ import { services } from '../game/services.ts';
 import { soundKey } from '../game/sounds.ts';
 import { music } from '../audio/music.ts';
 import { settings, tickMs } from '../game/settings.ts';
+import { keepAwake } from '../game/wakeLock.ts';
 import { CameraControls } from '../input/cameraControls.ts';
 import { PlayerControls } from '../input/playerControls.ts';
 import { TILE_MARGIN, TILE_SPACING } from '../render/textures.ts';
@@ -116,7 +117,10 @@ export class MapScene extends Phaser.Scene {
       this.controls?.resumeFollowing();
       if (!this.running && !this.world?.outcome) this.setRunning(true);
     };
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.playerInput?.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.playerInput?.destroy();
+      keepAwake(false);
+    });
 
     const campaign = this.config.mode === 'campaign';
     viewerUi().showScenario(scenario, campaign ? 'campaign' : 'skirmish', {
@@ -137,6 +141,8 @@ export class MapScene extends Phaser.Scene {
       help: () => this.pauseFor((resume) => openHelp('controls', resume)),
     });
     this.updateHud();
+    if (this.running) keepAwake(true);
+    suggestLandscape();
   }
 
   update(_time: number, delta: number): void {
@@ -160,6 +166,7 @@ export class MapScene extends Phaser.Scene {
       const outcome: Outcome | null = this.world!.outcome;
       if (outcome) {
         this.running = false;
+        keepAwake(false);
         music.play(outcome.result === 'victory' ? 'victory' : 'defeat');
         viewerUi().showOutcome(outcome);
       }
@@ -180,6 +187,7 @@ export class MapScene extends Phaser.Scene {
   private setRunning(running: boolean): void {
     if (this.world?.outcome) return;
     this.running = running;
+    keepAwake(running);
     this.accumulator = 0;
     viewerUi().setPlayback(this.running, this.speed);
   }
@@ -269,4 +277,13 @@ export class MapScene extends Phaser.Scene {
     if (!ours.length) return [w / 2, h / 2];
     return [ours.reduce((s, o) => s + o.xpos, 0) / ours.length, ours.reduce((s, o) => s + o.ypos, 0) / ours.length];
   }
+}
+
+let landscapeTipShown = false;
+
+/** Once per visit, suggest turning a phone held upright: battles see more of the field. */
+function suggestLandscape(): void {
+  if (landscapeTipShown || !matchMedia('(pointer: coarse) and (orientation: portrait)').matches) return;
+  landscapeTipShown = true;
+  viewerUi().toast('Tip: turn your phone sideways to see more of the field.');
 }
