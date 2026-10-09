@@ -892,6 +892,19 @@ canvas.sprite {
   color: var(--muted);
 }
 
+.signed-in {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  color: var(--muted);
+}
+
+.signed-in strong {
+  color: var(--text);
+}
+
 .online-list {
   display: flex;
   flex-direction: column;

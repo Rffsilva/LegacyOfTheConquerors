@@ -142,3 +142,37 @@ describe('online sign-in tokens', () => {
     expect(await samePassword(undefined, 'letmein')).toBe(false);
   });
 });
+
+describe('online accounts', () => {
+  it('treats usernames alike whatever their case and spacing, and checks them', async () => {
+    const { checkCode, checkUsername, usernameKey } = await import('../server/src/accounts.ts');
+    expect(usernameKey('  Ricardo  Silva ')).toBe(usernameKey('ricardo silva'));
+    expect(checkUsername('Irmão')).toBeNull();
+    expect(checkUsername('x')).toMatch(/2 to 20/);
+    expect(checkUsername('<script>')).toMatch(/letters/);
+    expect(checkCode('123')).toMatch(/at least 4/);
+    expect(checkCode('1234')).toBeNull();
+  });
+
+  it('keeps codes only as a salted hash and checks them', async () => {
+    const { hashCode, sameCode } = await import('../server/src/accounts.ts');
+    const account = { name: 'Ricardo', playerId: OWNER, salt: 'salt', hash: await hashCode('4321', 'salt'), created: 0, campaigns: [] };
+    expect(account.hash).not.toContain('4321');
+    expect(await sameCode(account, '4321')).toBe(true);
+    expect(await sameCode(account, '1234')).toBe(false);
+  });
+
+  it('keeps a list of campaigns, newest first, without duplicates', async () => {
+    const { updateCampaigns } = await import('../server/src/accounts.ts');
+    const account = { name: 'R', playerId: OWNER, salt: '', hash: '', created: 0, campaigns: [] as { id: string; name: string }[] };
+    const one = 'a'.repeat(64);
+    const two = 'b'.repeat(64);
+    updateCampaigns(account, { add: { id: one, name: 'One' } });
+    updateCampaigns(account, { add: { id: two, name: 'Two' } });
+    updateCampaigns(account, { add: { id: one, name: 'One again' } });
+    updateCampaigns(account, { add: { id: 'not-an-id', name: 'Bad' } });
+    expect(account.campaigns).toEqual([{ id: one, name: 'One again' }, { id: two, name: 'Two' }]);
+    updateCampaigns(account, { remove: two });
+    expect(account.campaigns.map((c) => c.name)).toEqual(['One again']);
+  });
+});

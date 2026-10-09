@@ -1,5 +1,6 @@
-// Talking to the online campaign server from the game: signing in, creating campaigns, and
-// what this device remembers (who you are, which campaigns you're in, invite links).
+// Talking to the online campaign server from the game: signing in with a username and code,
+// creating campaigns, and what this device remembers (who you are, your campaigns). The list
+// of campaigns is kept in your account too, so any device you sign in on has it.
 
 /** The server's address, set at build time; empty when this build has no online play. */
 export const SERVER = String(import.meta.env.VITE_ONLINE_SERVER ?? '').replace(/\/+$/, '');
@@ -7,8 +8,10 @@ export const SERVER = String(import.meta.env.VITE_ONLINE_SERVER ?? '').replace(/
 export interface Session {
   token: string;
   playerId: string;
-  /** The name other players see. */
+  /** The username, which other players see. */
   name: string;
+  /** Signed in with a username and code (not just a device sign-in from before accounts). */
+  account?: boolean;
 }
 
 export interface KnownCampaign {
@@ -32,24 +35,78 @@ export function forgetSession(): void {
   if (session) writeJson(SESSION_KEY, { ...session, token: '' });
 }
 
-/** Signs in with the access password; signing in again keeps the same player identity. */
-export async function signIn(password: string, name: string): Promise<Session> {
+/**
+ * Signs in with a username and personal code: an existing account if the username is taken
+ * (and the code is right), a new one if not. `password` is the online password, which a device
+ * that is still signed in doesn't need again. Afterwards, this device and the account share one
+ * list of campaigns.
+ */
+export async function signIn(username: string, code: string, password: string): Promise<Session> {
   const previous = readJson<Session>(SESSION_KEY);
-  const body = await post<{ token: string; playerId: string }>('/api/session', { password, token: previous?.token || previousToken() });
-  const session = { token: body.token, playerId: body.playerId, name };
+  const body = await post<{ token: string; playerId: string; name: string; campaigns: KnownCampaign[] }>('/api/session', {
+    username,
+    code,
+    password,
+    token: previous?.token || readJson<string>(`${SESSION_KEY}.last`) || undefined,
+  });
+  // Someone else's account on this device: their campaigns aren't ours.
+  if (previous?.playerId && previous.playerId !== body.playerId) forgetDevice();
+  const session: Session = { token: body.token, playerId: body.playerId, name: body.name, account: true };
   writeJson(SESSION_KEY, session);
   writeJson(`${SESSION_KEY}.last`, body.token);
+  await mergeCampaigns(session, body.campaigns);
   return session;
 }
 
-/** The last token this device had, kept after signing out so identity survives. */
-function previousToken(): string | undefined {
-  return readJson<string>(`${SESSION_KEY}.last`) ?? undefined;
+/** Fetches the account's campaigns (another device may have added some) and merges them in. */
+export async function refreshCampaigns(session: Session): Promise<KnownCampaign[]> {
+  try {
+    const response = await fetch(`${SERVER}/api/me`, { headers: { Authorization: `Bearer ${session.token}` } });
+    if (response.ok) await mergeCampaigns(session, ((await response.json()) as { campaigns: KnownCampaign[] }).campaigns);
+  } catch {
+    // offline: this device's list will do
+  }
+  return knownCampaigns();
 }
 
-export function rename(name: string): void {
-  const session = loadSession();
-  if (session) writeJson(SESSION_KEY, { ...session, name });
+/** Both lists together: the account's, plus any this device knew that the account didn't. */
+async function mergeCampaigns(session: Session, account: KnownCampaign[]): Promise<void> {
+  const local = knownCampaigns();
+  const merged = [...account, ...local.filter((c) => !account.some((a) => a.id === c.id))];
+  writeJson(CAMPAIGNS_KEY, merged);
+  for (const campaign of local.filter((c) => !account.some((a) => a.id === c.id))) syncCampaign(session, { add: campaign });
+}
+
+/**
+ * Logs off: this device forgets who you are and your campaigns (they stay in your account and
+ * online; sign in again, here or anywhere, to get them back).
+ */
+export function logOff(): void {
+  removeKey(SESSION_KEY);
+  removeKey(`${SESSION_KEY}.last`);
+  forgetDevice();
+}
+
+/** Everything this device kept about online campaigns. */
+function forgetDevice(): void {
+  removeKey(CAMPAIGNS_KEY);
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('lotc-online.cache.') || key.startsWith('lotc-online.pending.')) localStorage.removeItem(key);
+    }
+  } catch {
+    // nothing stored
+  }
+}
+
+/** Tells the account about a campaign joined or removed (best effort: the next sign-in merges anyway). */
+function syncCampaign(session: Session | null, change: { add?: KnownCampaign; remove?: string }): void {
+  if (!session?.account || !session.token) return;
+  void fetch(`${SERVER}/api/me/campaigns`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.token}` },
+    body: JSON.stringify(change),
+  }).catch(() => undefined);
 }
 
 /** Does the server still accept this sign-in? Network trouble counts as yes. */
@@ -71,12 +128,16 @@ export function knownCampaigns(): KnownCampaign[] {
 }
 
 export function rememberCampaign(campaign: KnownCampaign): void {
-  const others = knownCampaigns().filter((c) => c.id !== campaign.id);
-  writeJson(CAMPAIGNS_KEY, [campaign, ...others]);
+  const known = knownCampaigns();
+  const existing = known.find((c) => c.id === campaign.id);
+  if (existing?.name === campaign.name) return; // called on every update: only news goes out
+  writeJson(CAMPAIGNS_KEY, existing ? known.map((c) => (c.id === campaign.id ? campaign : c)) : [campaign, ...known]);
+  syncCampaign(loadSession(), { add: campaign });
 }
 
 export function forgetCampaign(id: string): void {
   writeJson(CAMPAIGNS_KEY, knownCampaigns().filter((c) => c.id !== id));
+  syncCampaign(loadSession(), { remove: id });
   removeKey(`lotc-online.cache.${id}`);
 }
 

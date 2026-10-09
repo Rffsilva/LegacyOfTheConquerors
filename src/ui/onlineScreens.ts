@@ -10,13 +10,20 @@ type Show = (...content: Node[]) => void;
 export interface SignInOptions {
   name: string;
   notice?: string;
-  signIn: (name: string, password: string) => Promise<void>;
+  /** Ask for the online password (a device that is still signed in doesn't need it again). */
+  needPassword: boolean;
+  signIn: (username: string, code: string, password: string) => Promise<void>;
   back: () => void;
 }
 
+/**
+ * Signing in with a username and a personal code: the same ones on any device bring back your
+ * campaigns. A username nobody has yet makes a new account.
+ */
 export function showSignIn(show: Show, options: SignInOptions): void {
-  const name = h('input', { value: options.name, maxLength: 24, autocomplete: 'username', placeholder: 'e.g. Ricardo' });
-  const password = h('input', { type: 'password', autocomplete: 'current-password' });
+  const name = h('input', { value: options.name, maxLength: 20, autocomplete: 'username', placeholder: 'e.g. Ricardo' });
+  const code = h('input', { type: 'password', maxLength: 64, autocomplete: 'current-password', placeholder: 'at least 4 characters' });
+  const password = h('input', { type: 'password', autocomplete: 'off' });
   const status = h('p', { className: 'notice', role: 'status' }, options.notice ?? '');
   const submit = h('button', { className: 'pill primary', type: 'submit' }, 'Sign in');
   const form = h('form', {
@@ -24,34 +31,37 @@ export function showSignIn(show: Show, options: SignInOptions): void {
     onsubmit: async (e: Event) => {
       e.preventDefault();
       if (!name.value.trim()) {
-        status.textContent = 'Choose a name your friends will recognise.';
+        status.textContent = 'Choose a username your friends will recognise.';
         return name.focus();
       }
       submit.disabled = true;
       status.textContent = 'Signing in…';
       try {
-        await options.signIn(name.value.trim(), password.value);
+        await options.signIn(name.value.trim(), code.value, password.value);
       } catch (error) {
         status.textContent = (error as Error).message;
         submit.disabled = false;
-        password.select();
       }
     },
   },
-    h('label', { className: 'name' }, h('span', {}, 'Your name'), name),
-    h('label', { className: 'name' }, h('span', {}, 'Password'), password),
+    h('label', { className: 'name' }, h('span', {}, 'Username'), name),
+    h('label', { className: 'name' }, h('span', {}, 'Your code'), code),
+    options.needPassword && h('label', { className: 'name' }, h('span', {}, 'Online password'), password),
     submit,
   );
   show(
     h('div', { className: 'menu online' },
       h('h1', {}, 'Online campaigns'),
-      h('p', { className: 'tagline' }, 'Online play is for invited players. Enter the password you were given.'),
+      h('p', { className: 'tagline' },
+        'Use the same username and code on any device to get your campaigns there. New here? Pick a username and a code you\'ll remember',
+        options.needPassword ? ', plus the online password you were given.' : '.',
+      ),
       status,
       form,
       h('button', { className: 'pill', onclick: options.back }, '‹ Back'),
     ),
   );
-  (options.name ? password : name).focus();
+  (options.name ? code : name).focus();
 }
 
 export interface CampaignListOptions {
@@ -62,7 +72,7 @@ export interface CampaignListOptions {
   create: (name: string, difficulty: number) => Promise<void>;
   join: (id: string, invite: string) => void;
   forget: (id: string) => void;
-  signOut: () => void;
+  logOff: () => void;
   back: () => void;
 }
 
@@ -124,9 +134,9 @@ export function showCampaignList(show: Show, options: CampaignListOptions): void
             h('button', { className: 'pill primary', onclick: () => options.open(c.id) }, c.name),
             h('button', {
               className: 'icon small',
-              ariaLabel: `Remove ${c.name} from this device`,
-              title: 'Remove from this device (the campaign itself stays online)',
-              onclick: () => confirm(`Remove "${c.name}" from this device? It stays online; an invite link brings it back.`) && options.forget(c.id),
+              ariaLabel: `Remove ${c.name} from your list`,
+              title: 'Remove from your list (the campaign itself stays online)',
+              onclick: () => confirm(`Remove "${c.name}" from your list, on all your devices? The campaign stays online; an invite link brings it back.`) && options.forget(c.id),
             }, '✕'),
           ),
         ),
@@ -136,7 +146,13 @@ export function showCampaignList(show: Show, options: CampaignListOptions): void
   show(
     h('div', { className: 'menu online' },
       h('h1', {}, 'Online campaigns'),
-      h('p', { className: 'tagline' }, `Signed in as ${options.name}. `, h('button', { className: 'link', onclick: options.signOut }, 'Sign out')),
+      h('div', { className: 'signed-in' },
+        h('span', {}, 'Signed in as ', h('strong', {}, options.name)),
+        h('button', {
+          className: 'pill small',
+          onclick: () => confirm('Log off on this device? Your campaigns stay saved online: sign in again with your username and code to get them back.') && options.logOff(),
+        }, '🚪 Log off'),
+      ),
       status,
       list,
       create,
