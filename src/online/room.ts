@@ -115,7 +115,15 @@ export function toMemberCampaign(view: Campaign): MemberCampaign {
   return { money: view.money, score: view.score, team: view.team.map(toData), scenario: view.scenario, completed: [...view.completed], hired: { ...view.hired } };
 }
 
-export function campaignInfo(state: RoomState, viewer: string, presence: ReadonlyMap<string, Whereabouts>): CampaignInfo {
+/** What the lobby and the battle being fought look like, for campaignInfo. */
+export interface PlayState {
+  field: number;
+  ready: ReadonlySet<string>;
+  battle: { id: string; scenario: number; players: readonly { id: string; away: boolean }[] } | null;
+}
+
+export function campaignInfo(state: RoomState, viewer: string, presence: ReadonlyMap<string, Whereabouts>, play?: PlayState): CampaignInfo {
+  const battle = play?.battle ?? null;
   const members: PublicMember[] = Object.entries(state.members)
     .sort(([, a], [, b]) => a.joined - b.joined)
     .map(([id, m]) => ({
@@ -125,9 +133,25 @@ export function campaignInfo(state: RoomState, viewer: string, presence: Readonl
       teamSize: m.campaign.team.length,
       topLevel: Math.max(0, ...m.campaign.team.map((g) => g.level)),
       score: m.campaign.score,
+      ready: play?.ready.has(id) ?? false,
+      inBattle: battle?.players.some((p) => p.id === id) ?? false,
       you: id === viewer,
     }));
-  return { id: state.id, name: state.name, difficulty: state.difficulty, invite: state.invite, open: openFields(state), members };
+  const open = openFields(state);
+  return {
+    id: state.id,
+    name: state.name,
+    difficulty: state.difficulty,
+    invite: state.invite,
+    open,
+    members,
+    field: play?.field ?? Math.max(...open),
+    battle: battle && {
+      id: battle.id,
+      scenario: battle.scenario,
+      playing: battle.players.filter((p) => !p.away).map((p) => state.members[p.id]?.name ?? '?'),
+    },
+  };
 }
 
 export type ActResult = { error?: string; report?: BattleReport };
@@ -194,12 +218,12 @@ function applyResult(view: Campaign, msg: Extract<ClientMessage, { t: 'result' }
   return { report: applyBattleSummary(view, cleanSummary(msg.summary, squad), squad, int(msg.par, 1, 1000)) };
 }
 
-function sameSquad(team: readonly Guy[], squad: readonly SquadEntry[] | undefined): boolean {
+export function sameSquad(team: readonly Guy[], squad: readonly SquadEntry[] | undefined): boolean {
   return Array.isArray(squad) && squad.length === team.length && team.every((g, i) => squad[i]?.name === g.name && squad[i]?.family === g.family);
 }
 
 /** A summary from the client, with only sensible values kept. Records never go down. */
-function cleanSummary(summary: BattleSummary, squad: readonly Guy[]): BattleSummary {
+export function cleanSummary(summary: BattleSummary, squad: readonly Guy[]): BattleSummary {
   const o = summary?.outcome;
   const exitTo = o && 'exitTo' in o && o.exitTo !== undefined ? int(o.exitTo, 1, 999) : undefined;
   const outcome: BattleSummary['outcome'] =

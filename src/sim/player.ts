@@ -40,6 +40,8 @@ export class PlayerController {
   readonly num: number;
   readonly team: number;
   control: Walker | null = null;
+  /** Online battles: false while the player is away, their squad left to the computer. */
+  active = true;
 
   constructor(world: World, num = 0, team = 0) {
     this.world = world;
@@ -49,6 +51,10 @@ export class PlayerController {
 
   /** Applies one tick of input. Returns false once nobody is left to control. */
   update(input: PlayerInput): boolean {
+    if (!this.active) {
+      this.release();
+      return this.hasSquad();
+    }
     const previous = this.control;
     if (!this.ensureControl()) return false;
     let c = this.control!;
@@ -93,7 +99,10 @@ export class PlayerController {
     return true;
   }
 
-  /** Picks someone to control if we have nobody: the squad leader, other squad members, then any ally. */
+  /**
+   * Picks someone to control if we have nobody: the squad leader, other squad members, then any
+   * ally. Online, only our own squad: friends' units are theirs.
+   */
   private ensureControl(): boolean {
     const c = this.control;
     if (c && !c.dead) {
@@ -101,8 +110,9 @@ export class PlayerController {
       return true;
     }
     const livings = this.world.oblist.filter((o) => !o.dead && o.order === Order.LIVING);
-    const next =
-      livings.find((o) => o.user === -1 && o.myguy?.leader && o.teamNum === this.team) ??
+    const next = this.world.multiplayer
+      ? (livings.find((o) => o.user === -1 && o.myguy?.leader && o.squad === this.num) ?? livings.find((o) => o.user === -1 && o.squad === this.num))
+      : livings.find((o) => o.user === -1 && o.myguy?.leader && o.teamNum === this.team) ??
       livings.find((o) => o.user === -1 && o.myguy && o.teamNum === this.team) ??
       livings.find((o) => o.user === -1 && o.teamNum === this.team) ??
       livings.find((o) => o.myguy);
@@ -112,6 +122,26 @@ export class PlayerController {
     }
     this.take(next);
     return true;
+  }
+
+  /** Hands our unit back to the AI, keeping nothing under control. */
+  private release(): void {
+    const current = this.control;
+    if (current && current.user === this.num) {
+      current.restoreActType();
+      if (current.actType === Act.CONTROL) current.setActType(Act.RANDOM);
+      current.user = -1;
+    }
+    this.control = null;
+  }
+
+  private hasSquad(): boolean {
+    return this.world.oblist.some((o) => !o.dead && o.order === Order.LIVING && o.squad === this.num);
+  }
+
+  /** Online battles count only our own squad as ours to command. */
+  private mine(ob: Walker, c: Walker): boolean {
+    return this.world.multiplayer ? ob.squad === this.num : ob.teamNum === c.teamNum;
   }
 
   private take(ob: Walker): void {
@@ -133,7 +163,7 @@ export class PlayerController {
     const start = list.indexOf(current);
     for (let i = 1; i <= list.length; i++) {
       const ob = list[(start + i) % list.length];
-      if (!ob.dead && ob.order === Order.LIVING && ob.teamNum === this.team && ob.realTeamNum === 255 && ob.user === -1) {
+      if (!ob.dead && ob.order === Order.LIVING && ob.teamNum === this.team && ob.realTeamNum === 255 && ob.user === -1 && (!this.world.multiplayer || ob.squad === this.num)) {
         this.take(ob);
         return;
       }
@@ -155,7 +185,7 @@ export class PlayerController {
   /** Squad mates without a leader come to us. */
   private yell(c: Walker): void {
     for (const ob of this.world.oblist) {
-      if (ob.order === Order.LIVING && ob.actType !== Act.CONTROL && ob.teamNum === c.teamNum && !ob.leader) {
+      if (ob.order === Order.LIVING && ob.actType !== Act.CONTROL && this.mine(ob, c) && !ob.leader) {
         ob.leader = c;
         ob.foe = null;
         ob.stats.forceCommand(Command.FOLLOW, 100, 0, 0);
@@ -171,7 +201,7 @@ export class PlayerController {
     const world = this.world;
     if (c.action === Action.NONE) {
       for (const ob of world.oblist) {
-        if (ob.teamNum !== c.teamNum) continue;
+        if (!this.mine(ob, c)) continue;
         ob.leader = c;
         ob.foe = null;
         ob.action = Action.FOLLOW;
@@ -179,7 +209,7 @@ export class PlayerController {
       world.notify('SUMMONING DEFENSE!', c);
     } else if (c.action === Action.FOLLOW) {
       for (const ob of world.oblist) {
-        if (ob.order === Order.LIVING && ob.actType !== Act.CONTROL && ob.teamNum === c.teamNum) ob.action = Action.NONE;
+        if (ob.order === Order.LIVING && ob.actType !== Act.CONTROL && this.mine(ob, c)) ob.action = Action.NONE;
       }
       c.action = Action.NONE;
       world.notify('RELEASING MEN!', c);

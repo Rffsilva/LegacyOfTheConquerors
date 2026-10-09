@@ -1,9 +1,8 @@
 // A live connection to one online campaign. Keeps this player's barracks (`view`) and what
-// everyone else is doing (`info`) up to date, reconnects after signal drops, and holds on to
-// battle results until the server has them, so a battle fought offline still counts.
+// everyone else is doing (`info`) up to date, carries the ready-up lobby and the battle being
+// fought, and reconnects after signal drops (rejoining the battle where it left off).
 
 import {
-  applyBattleSummary,
   dismiss,
   hire,
   setLeader,
@@ -14,9 +13,10 @@ import {
   type Campaign,
   type TeamOps,
 } from '../game/campaign.ts';
-import type { Guy } from '../sim/guy.ts';
 import { readJson, rememberCampaign, SERVER, stillSignedIn, writeJson, type Session } from './client.ts';
-import { CLOSE_FORBIDDEN, type CampaignInfo, type ClientMessage, type MemberCampaign, type ServerMessage, type SquadEntry, type Whereabouts } from './protocol.ts';
+import type { Frame } from './lockstep.ts';
+import type { BattleMessage } from './onlineBattle.ts';
+import { CLOSE_FORBIDDEN, PROTOCOL_VERSION, type CampaignInfo, type ClientMessage, type MemberCampaign, type ServerMessage, type Whereabouts } from './protocol.ts';
 import { toData, toGuy } from './room.ts';
 
 export type ConnectionStatus = 'connecting' | 'online' | 'offline' | 'signed-out' | 'refused';
@@ -49,6 +49,13 @@ export class OnlineCampaign {
   /** Why the server refused us, when status is 'refused'. */
   refusal = '';
   onChange?: (change: CampaignChange) => void;
+  /** A battle to play: just started, joined, or sent again after reconnecting. */
+  onBattle?: (message: BattleMessage) => void;
+  onTicks?: (frames: Frame[]) => void;
+  onBattleEnd?: (id: string, reason: string) => void;
+  onReport?: (id: string, report: BattleReport) => void;
+  /** The battle we're playing, to rejoin after a dropped connection. */
+  private following: string | null = null;
 
   private readonly session: Session;
   private invite: string | null;
@@ -76,7 +83,7 @@ export class OnlineCampaign {
   }
 
   /** Has the barracks been loaded, from the server or from this device's last copy? */
-  get ready(): boolean {
+  get loaded(): boolean {
     return this.info !== null;
   }
 
@@ -92,24 +99,36 @@ export class OnlineCampaign {
     this.send({ t: 'where', where });
   }
 
-  /**
-   * Records a battle fought on this device: applies it here straight away (for the report
-   * screen) and sends it to the server, now or when the connection comes back.
-   */
-  finishBattle(scenario: number, par: number, squad: readonly Guy[], summary: BattleSummary): BattleReport {
-    const result: ResultMessage = {
-      t: 'result',
-      id: crypto.randomUUID(),
-      scenario,
-      par,
-      squad: squad.map((g): SquadEntry => ({ name: g.name, family: g.family })),
-      summary,
-    };
-    this.pending = [...this.pending, result];
-    this.view.scenario = scenario;
-    const report = applyBattleSummary(this.view, summary, this.view.team, par);
-    this.send(result);
-    return report;
+  /** Our entry in the campaign's player list. */
+  get me(): CampaignInfo['members'][number] | undefined {
+    return this.info?.members.find((m) => m.you);
+  }
+
+  ready(ready: boolean): void {
+    this.send({ t: 'ready', ready });
+  }
+
+  chooseField(scenario: number): void {
+    this.send({ t: 'field', scenario });
+  }
+
+  /** Into the battle being fought (or back into it). */
+  joinBattle(): void {
+    this.send({ t: 'battle-join' });
+  }
+
+  /** Out of the battle: our squad fights on under the computer. */
+  leaveBattle(): void {
+    this.following = null;
+    this.send({ t: 'battle-leave' });
+  }
+
+  sendInput(code: number): void {
+    this.send({ t: 'input', code });
+  }
+
+  submitBattle(id: string, par: number, summaries: (BattleSummary | null)[]): void {
+    this.send({ t: 'battle-result', id, par, summaries });
   }
 
   close(): void {
@@ -128,7 +147,7 @@ export class OnlineCampaign {
 
   private connect(): void {
     if (this.closed || this.socket) return;
-    const params = new URLSearchParams({ token: this.session.token, name: this.session.name });
+    const params = new URLSearchParams({ token: this.session.token, name: this.session.name, v: String(PROTOCOL_VERSION) });
     if (this.invite) params.set('invite', this.invite);
     const url = `${SERVER.replace(/^http/, 'ws')}/api/campaigns/${this.id}/connect?${params}`;
     let opened = false;
@@ -147,6 +166,7 @@ export class OnlineCampaign {
       }, PING_MS);
       socket.send(JSON.stringify({ t: 'where', where: this.where } satisfies ClientMessage));
       for (const result of this.pending) socket.send(JSON.stringify(result));
+      if (this.following) socket.send(JSON.stringify({ t: 'battle-join' } satisfies ClientMessage));
     });
     socket.addEventListener('message', (event) => {
       this.lastHeard = Date.now();
@@ -204,10 +224,25 @@ export class OnlineCampaign {
       writeJson(this.cacheKey(), { campaign: msg.campaign, you: msg.you } satisfies Cached);
       rememberCampaign({ id: this.id, name: msg.campaign.name });
       const viewChanged = JSON.stringify(this.viewData()) !== before;
+      // The battle we were in is gone (say, the server restarted while we were away).
+      const following = this.following;
+      if (following && msg.campaign.battle?.id !== following) {
+        this.following = null;
+        this.onBattleEnd?.(following, 'The battle was interrupted.');
+      }
       this.setStatus('online', { view: viewChanged });
+    } else if (msg.t === 'battle') {
+      this.following = msg.setup.id;
+      this.onBattle?.(msg);
+    } else if (msg.t === 'ticks') {
+      this.onTicks?.(msg.frames);
+    } else if (msg.t === 'battle-end') {
+      if (this.following === msg.id) this.following = null;
+      this.onBattleEnd?.(msg.id, msg.reason);
     } else if (msg.t === 'report') {
       this.settle(msg.id);
-      this.onChange?.({ view: false, notice: 'Battle result saved.' });
+      if (this.onReport) this.onReport(msg.id, msg.report);
+      else this.onChange?.({ view: false, notice: 'Battle result saved.' });
     } else if (msg.t === 'error') {
       if (msg.id) this.settle(msg.id);
       if (msg.fatal) {
@@ -246,7 +281,8 @@ export class OnlineCampaign {
 
   /** Applies a team change here at once, and sends it; the server's answer has the last word. */
   private change(local: () => ActionResult, message: () => ClientMessage): ActionResult {
-    if (this.status !== 'online') return { ok: false, reason: 'Not connected right now. Team changes need a connection (you can still fight).' };
+    if (this.status !== 'online') return { ok: false, reason: 'Not connected right now. Team changes need a connection.' };
+    if (this.me?.inBattle) return { ok: false, reason: 'Your squad is in battle. Changes wait until it ends.' };
     const result = local();
     if (result.ok) this.send(message());
     return result;

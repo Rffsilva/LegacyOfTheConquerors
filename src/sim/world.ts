@@ -47,6 +47,11 @@ export interface WorldOptions {
   difficulty?: number;
   /** The player's squad, placed on the scenario's team markers. */
   squad?: readonly Guy[];
+  /**
+   * Online battles: one squad per player instead of `squad`. Each player controls only their
+   * own squad, and more players can join later (addSquad).
+   */
+  squads?: readonly (readonly Guy[])[];
   /** Number of human players; 0 lets the AI fight the whole battle. */
   players?: number;
   /** Scenario numbers already won, which exits may retreat to before the field is clear. */
@@ -75,6 +80,8 @@ export class World {
   /** Livings ever created. The original never decrements it, so generators wind down over time. */
   numobs = 0;
   score: number[] = new Array(8).fill(0);
+  /** Online battles: the score each player's squad earned. */
+  playerScore: number[] = [];
   alliedMode = false;
   enemyFreeze = 0;
   myTeam = 0;
@@ -86,6 +93,8 @@ export class World {
   searchCounter = 0;
   events: WorldEvent[] = [];
   readonly players: PlayerController[];
+  /** Several players, each with their own squad (an online battle). */
+  readonly multiplayer: boolean;
   private readonly completed: ReadonlySet<number>;
   private idCounter = 0;
 
@@ -105,9 +114,14 @@ export class World {
     // game.cpp: scale every placed object by its level and the difficulty.
     for (const ob of [...this.oblist]) ob.setDifficulty(ob.stats.level);
     this.completed = new Set(options.completed ?? []);
-    this.placeSquad(options.squad ?? []);
+    this.multiplayer = options.squads !== undefined;
+    const squads = options.squads ?? [options.squad ?? []];
+    squads.forEach((squad, player) => this.placeSquad(squad, player));
+    for (const marker of this.oblist) if (marker.order === Order.SPECIAL) marker.dead = true;
+    this.cleanup();
     if (options.alreadyWon) this.clearWonField();
-    this.players = Array.from({ length: options.players ?? 1 }, (_, i) => new PlayerController(this, i, 0));
+    const players = options.squads ? options.squads.length : (options.players ?? 1);
+    this.players = Array.from({ length: players }, (_, i) => new PlayerController(this, i, 0));
     for (const p of this.players) p.update(NO_INPUT);
   }
 
@@ -130,29 +144,9 @@ export class World {
   }
 
   /** game.cpp: turn each squad member into a unit and put it on a team marker. */
-  private placeSquad(squad: readonly Guy[]): void {
+  private placeSquad(squad: readonly Guy[], player: number): void {
     for (const guy of squad) {
-      const unit = this.addOb(Order.LIVING, guy.family);
-      const s = unit.stats;
-      unit.myguy = guy;
-      s.level = guy.level;
-      s.maxHitpoints = 10 + guy.constitution * 3 + idiv(guy.strength, 2) + 25 * guy.level;
-      s.hitpoints = s.maxHitpoints;
-      unit.damage += idiv(guy.strength, 4) + guy.level + idiv(guy.dexterity, 11);
-      s.maxMagicpoints = 10 + guy.intelligence * 3 + 25 * guy.level + guy.dexterity;
-      s.magicpoints = s.maxMagicpoints;
-      s.armor = guy.armor + idiv(guy.dexterity, 14) + guy.level;
-      [s.healPerRound, s.maxHealDelay] = regenRate(guy.constitution + idiv(guy.strength, 6) + guy.level * 2 + 20, s.healPerRound);
-      s.currentHealDelay = 0;
-      [s.magicPerRound, s.maxMagicDelay] = regenRate(guy.intelligence * 45 + guy.level * 60 + guy.dexterity * 15 + 200, s.magicPerRound);
-      s.currentMagicDelay = 0;
-      unit.stepsize = Math.min(unit.stepsize + idiv(guy.dexterity, 54), 12);
-      unit.normalStepsize = unit.stepsize;
-      unit.fireFrequency = Math.max(1, unit.fireFrequency - idiv(guy.dexterity, 47));
-      if (unit.family === L.SOLDIER) unit.weaponsLeft = idiv(s.level + 1, 2);
-      unit.teamNum = guy.teamnum;
-      unit.realTeamNum = 255;
-
+      const unit = this.squadUnit(guy, player);
       const marker = this.firstOf(Order.SPECIAL, SpecialFamily.RESERVED_TEAM, guy.teamnum) ?? this.firstOf(Order.SPECIAL, SpecialFamily.RESERVED_TEAM);
       if (marker) {
         unit.setxy(marker.xpos, marker.ypos);
@@ -161,8 +155,59 @@ export class World {
         unit.teleport();
       }
     }
-    for (const marker of this.oblist) if (marker.order === Order.SPECIAL) marker.dead = true;
-    this.cleanup();
+  }
+
+  /**
+   * Online battles: a player joining a battle in progress. Their squad arrives beside an ally
+   * (or anywhere, if none is left), and they take control of it.
+   */
+  addSquad(player: number, squad: readonly Guy[]): void {
+    const ally =
+      this.players.map((p) => p.control).find((c) => c && !c.dead) ??
+      this.oblist.find((o) => !o.dead && o.order === Order.LIVING && o.teamNum === this.myTeam && o.squad >= 0);
+    for (const guy of squad) {
+      const unit = this.squadUnit(guy, player);
+      if (ally) {
+        unit.centerOn(ally);
+        unit.teleportRanged(48);
+      } else {
+        unit.teleport();
+      }
+    }
+    while (this.players.length <= player) this.players.push(new PlayerController(this, this.players.length, 0));
+    this.players[player].active = true;
+    this.players[player].update(NO_INPUT);
+  }
+
+  /** Online battles: a player leaving hands their squad to the computer; coming back takes it again. */
+  setPlayerActive(player: number, active: boolean): void {
+    const p = this.players[player];
+    if (p) p.active = active;
+  }
+
+  private squadUnit(guy: Guy, player: number): Walker {
+    const unit = this.addOb(Order.LIVING, guy.family);
+    unit.squad = player;
+    const s = unit.stats;
+    unit.myguy = guy;
+    s.level = guy.level;
+    s.maxHitpoints = 10 + guy.constitution * 3 + idiv(guy.strength, 2) + 25 * guy.level;
+    s.hitpoints = s.maxHitpoints;
+    unit.damage += idiv(guy.strength, 4) + guy.level + idiv(guy.dexterity, 11);
+    s.maxMagicpoints = 10 + guy.intelligence * 3 + 25 * guy.level + guy.dexterity;
+    s.magicpoints = s.maxMagicpoints;
+    s.armor = guy.armor + idiv(guy.dexterity, 14) + guy.level;
+    [s.healPerRound, s.maxHealDelay] = regenRate(guy.constitution + idiv(guy.strength, 6) + guy.level * 2 + 20, s.healPerRound);
+    s.currentHealDelay = 0;
+    [s.magicPerRound, s.maxMagicDelay] = regenRate(guy.intelligence * 45 + guy.level * 60 + guy.dexterity * 15 + 200, s.magicPerRound);
+    s.currentMagicDelay = 0;
+    unit.stepsize = Math.min(unit.stepsize + idiv(guy.dexterity, 54), 12);
+    unit.normalStepsize = unit.stepsize;
+    unit.fireFrequency = Math.max(1, unit.fireFrequency - idiv(guy.dexterity, 47));
+    if (unit.family === L.SOLDIER) unit.weaponsLeft = idiv(s.level + 1, 2);
+    unit.teamNum = guy.teamnum;
+    unit.realTeamNum = 255;
+    return unit;
   }
 
   /** Revisiting a won field: everything but the squad, exits and teleporters is gone. */
@@ -412,9 +457,10 @@ export class World {
     return best;
   }
 
-  /** Who COMMAND_FOLLOW should follow: the unit player 1 controls. */
-  followLeaderFor(_ob: Walker): Walker | null {
-    return this.oblist.find((o) => !o.dead && o.user === 0) ?? null;
+  /** Who COMMAND_FOLLOW should follow: the unit its player controls (player 1's, offline). */
+  followLeaderFor(ob: Walker): Walker | null {
+    const player = this.multiplayer && ob.squad >= 0 ? ob.squad : 0;
+    return this.oblist.find((o) => !o.dead && o.user === player) ?? null;
   }
 
   findNearestBlood(who: Walker): Walker | null {
@@ -451,8 +497,11 @@ export class World {
     this.events.push({ type: 'message', message });
   }
 
-  addScore(team: number, amount: number): void {
+  /** Adds to a team's score, and to the scoring unit's player's (summons score for their summoner). */
+  addScore(team: number, amount: number, who?: Walker): void {
     if (team >= 0 && team < this.score.length) this.score[team] += amount;
+    const squad = who ? (who.squad >= 0 ? who.squad : (who.owner?.squad ?? -1)) : -1;
+    if (squad >= 0) this.playerScore[squad] = (this.playerScore[squad] ?? 0) + amount;
   }
 
   /** A player-controlled unit stepped on an exit. */

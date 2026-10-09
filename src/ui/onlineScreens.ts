@@ -198,11 +198,65 @@ export function presenceBar(campaign: OnlineCampaign): { element: HTMLElement; u
       ...(campaign.info?.members ?? []).map((m) =>
         h('li', { className: m.online ? 'on' : '' },
           h('strong', {}, m.you ? `${m.name} (you)` : m.name),
-          ` · ${m.online ? (m.where?.at === 'battle' ? `fighting on #${m.where.scenario}` : 'in the barracks') : 'away'}`,
+          ` · ${m.online ? (m.where?.at === 'battle' ? `fighting on #${m.where.scenario}` : m.ready ? '✓ ready' : 'in the barracks') : m.inBattle ? 'away (squad still fighting)' : 'away'}`,
           ` · ${m.teamSize} ${m.teamSize === 1 ? 'man' : 'men'}${m.topLevel ? `, best Lv ${m.topLevel}` : ''}`,
         ),
       ),
     );
+  };
+  update();
+  return { element, update };
+}
+
+/**
+ * The ready-up lobby under an online barracks: the field everyone is getting ready for (anyone
+ * can change it), and the button that says you're ready, or joins the battle being fought.
+ */
+export function lobbyBar(campaign: OnlineCampaign, fieldTitle: (n: number) => string): { element: HTMLElement; update: () => void } {
+  const picker = h('select', {
+    className: 'picker',
+    ariaLabel: 'Field to fight on',
+    onchange: () => campaign.chooseField(Number(picker.value)),
+  });
+  const button = h('button', {
+    className: 'pill primary',
+    onclick: () => {
+      const info = campaign.info;
+      if (info?.battle) campaign.joinBattle();
+      else campaign.ready(!campaign.me?.ready);
+    },
+  });
+  const status = h('p', { className: 'lobby-status' });
+  const element = h('footer', { className: 'barracks-bottom lobby' },
+    h('label', { className: 'field' }, h('span', {}, 'Next field'), picker),
+    button,
+    status,
+  );
+
+  const update = () => {
+    const info = campaign.info;
+    const me = campaign.me;
+    if (!info) return;
+    const open = info.open ?? [1];
+    const field = info.field ?? Math.max(...open);
+    picker.replaceChildren(...open.map((n) => new Option(`${fieldTitle(n)}${campaign.view.completed.includes(n) ? ' (won)' : ''}`, String(n), false, n === field)));
+    picker.disabled = !!info.battle || campaign.status !== 'online';
+    button.disabled = campaign.status !== 'online' || (!info.battle && !campaign.view.team.length);
+    button.classList.toggle('on', !info.battle && !!me?.ready);
+
+    const here = info.members.filter((m) => m.online && m.where?.at === 'barracks');
+    if (info.battle) {
+      button.textContent = me?.inBattle ? '⚔ Back to the battle' : `⚔ Join the battle on #${info.battle.scenario}`;
+      status.textContent = `${info.battle.playing.join(', ') || 'Nobody'} ${info.battle.playing.length === 1 ? 'is' : 'are'} fighting on ${fieldTitle(info.battle.scenario)}.`;
+    } else {
+      button.textContent = me?.ready ? '✓ Ready (tap to cancel)' : '✋ Ready';
+      const waiting = here.filter((m) => !m.ready).map((m) => (m.you ? 'you' : m.name));
+      status.textContent = !campaign.view.team.length
+        ? 'Hire someone to go to battle.'
+        : waiting.length
+          ? `The battle starts when everyone in the barracks is ready. Waiting for: ${waiting.join(', ')}.`
+          : 'Starting…';
+    }
   };
   update();
   return { element, update };

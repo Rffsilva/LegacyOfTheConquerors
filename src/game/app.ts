@@ -21,9 +21,10 @@ import {
   SignedOutError,
   signIn,
 } from '../online/client.ts';
+import type { BattleMessage } from '../online/onlineBattle.ts';
 import { OnlineCampaign } from '../online/onlineCampaign.ts';
-import { presenceBar, showCampaignList, showConnecting, showSignIn } from '../ui/onlineScreens.ts';
-import { applyBattle, localTeamOps, newCampaign, squadFor, summarizeBattle, type Campaign } from './campaign.ts';
+import { lobbyBar, presenceBar, showCampaignList, showConnecting, showSignIn } from '../ui/onlineScreens.ts';
+import { applyBattle, localTeamOps, newCampaign, squadFor, type Campaign } from './campaign.ts';
 import { canInstall, initPwa, install, needsManualInstall, onInstallChange } from './pwa.ts';
 import { services } from './services.ts';
 import { loadCampaign, saveCampaign } from './storage.ts';
@@ -194,13 +195,13 @@ export class App {
     this.closeOnline();
     const campaign = new OnlineCampaign(session, id, invite);
     this.online = campaign;
-    if (campaign.ready) return this.onlineBarracks(campaign);
+    if (campaign.loaded) return this.onlineBarracks(campaign);
     const back = () => this.onlineMenu();
     showConnecting((...c) => this.screens.show(...c), 'Connecting…', back);
     campaign.onChange = () => {
       if (campaign.status === 'signed-out') return this.signedOut();
       if (campaign.status === 'refused') return showConnecting((...c) => this.screens.show(...c), campaign.refusal, back);
-      if (campaign.ready) return this.onlineBarracks(campaign);
+      if (campaign.loaded) return this.onlineBarracks(campaign);
       if (campaign.status === 'offline') showConnecting((...c) => this.screens.show(...c), "Can't reach the server. Still trying…", back);
     };
   }
@@ -211,15 +212,17 @@ export class App {
     music.play('menu');
     campaign.setWhere({ at: 'barracks' });
     const bar = presenceBar(campaign);
+    const lobby = lobbyBar(campaign, (n) => this.screens.scenarioTitle(n));
     const view = this.screens.showBarracks(
       campaign.view,
       {
         team: campaign.team,
         extra: bar.element,
+        footer: lobby.element,
         settings: () => openSettings(),
         help: () => openHelp('units'),
         menu: () => this.onlineMenu(),
-        fight: (n) => this.onlineFight(campaign, n),
+        fight: () => undefined, // online battles start from the lobby
       },
       notice ?? (campaign.view.team.length ? undefined : `Welcome to ${campaign.view.name}. You have ${campaign.view.money.toLocaleString('en-US')} to hire your first warriors.`),
     );
@@ -227,31 +230,34 @@ export class App {
     campaign.onChange = (change) => {
       if (campaign.status === 'signed-out') return this.signedOut();
       bar.update();
+      lobby.update();
       const backOnline = campaign.status === 'online' && wasOffline;
       if (campaign.status === 'online' || campaign.status === 'offline') wasOffline = campaign.status === 'offline';
       if (change.view || change.notice || backOnline) view.refresh(change.notice ?? (backOnline ? 'Back online.' : undefined));
     };
+    // Everyone's ready (or we joined the battle being fought): to the battlefield.
+    campaign.onBattle = (message) => this.onlineBattle(campaign, message);
   }
 
-  private onlineFight(campaign: OnlineCampaign, scenario: number): void {
-    if (!this.exists(`scen${scenario}`)) return this.onlineBarracks(campaign, `Field ${scenario} doesn't exist. Pick another.`);
-    const squad = squadFor(campaign.view);
+  private onlineBattle(campaign: OnlineCampaign, message: BattleMessage): void {
+    const id = `scen${message.setup.scenario}`;
+    if (!this.exists(id)) return this.onlineBarracks(campaign, `This game doesn't have field ${message.setup.scenario}. Is it up to date?`);
     // Mid-battle, only show what the server has to say; the barracks catches up afterwards.
-    campaign.onChange = (change) => change.notice && viewerUi().toast(change.notice);
-    campaign.setWhere({ at: 'battle', scenario });
+    campaign.onChange = (change) => {
+      if (change.notice) viewerUi().toast(change.notice);
+    };
     this.startBattle({
-      id: `scen${scenario}`,
-      mode: 'campaign',
-      squad,
-      completed: campaign.view.completed,
-      alreadyWon: campaign.view.completed.includes(scenario),
-      difficulty: campaign.view.difficulty,
-      onFinish: (world, par) => {
-        const report = campaign.finishBattle(scenario, par, squad, summarizeBattle(world, squad));
-        this.leaveBattle();
-        campaign.setWhere({ at: 'barracks' });
-        campaign.onChange = undefined;
-        this.screens.showReport(report, () => this.onlineBarracks(campaign));
+      id,
+      mode: 'online',
+      squad: [],
+      online: {
+        campaign,
+        message,
+        done: (report, ended) => {
+          this.leaveBattle();
+          if (report) this.screens.showReport(report, () => this.onlineBarracks(campaign));
+          else this.onlineBarracks(campaign, ended);
+        },
       },
     });
   }

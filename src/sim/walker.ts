@@ -43,6 +43,8 @@ export class Walker {
   family: number;
   stats: Statistics;
   myguy: Guy | null = null;
+  /** Online battles: which player's squad this unit belongs to (-1: nobody's). */
+  squad = -1;
 
   // Position and sprite (pixie) state.
   xpos = -1;
@@ -829,7 +831,7 @@ export class Walker {
           this.myguy.exp += idiv(newexp, 3);
         } else {
           this.myguy.exp += newexp;
-          if (getScore) world.addScore(this.teamNum, damage + target.stats.level);
+          if (getScore) world.addScore(this.teamNum, damage + target.stats.level, this);
         }
       }
     }
@@ -851,7 +853,7 @@ export class Walker {
 
     const playerTeam = 0;
     if (this.owner && target.order !== Order.WEAPON && playerTeam !== target.teamNum) {
-      if (getScore) world.addScore(this.teamNum, damage + target.stats.level);
+      if (getScore) world.addScore(this.teamNum, damage + target.stats.level, this);
       if (headguy.myguy) headguy.myguy.exp += newexp;
     }
 
@@ -881,7 +883,7 @@ export class Walker {
         headguy.myguy.kills++;
         headguy.myguy.levelKills += target.stats.level;
       }
-      if (getScore) world.addScore(this.teamNum, damage + 10 * target.stats.level);
+      if (getScore) world.addScore(this.teamNum, damage + 10 * target.stats.level, this);
       if (name && !target.lifetime && !target.owner) world.message(`ENEMY DEATH: ${name} DIED!`);
       if (world.remainingFoes(0) === 1) world.message('All foes defeated!');
       return;
@@ -1173,7 +1175,10 @@ export class Walker {
     to.weaponCost = from.weaponCost;
     to.bitFlags = from.bitFlags;
     to.deleteMe = from.deleteMe;
-    if (this.myguy) target.myguy = this.myguy.clone();
+    if (this.myguy) {
+      target.myguy = this.myguy.clone();
+      target.squad = this.squad;
+    }
   }
 
   /** Changes into another kind of object in place, keeping our centre. */
@@ -1266,6 +1271,7 @@ export class Walker {
     child.leader = this.leader;
     if (this.myguy) {
       child.myguy = this.myguy;
+      child.squad = this.squad;
       this.myguy = null;
     }
     child.centerOn(this);

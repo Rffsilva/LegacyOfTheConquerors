@@ -465,6 +465,8 @@ select:focus-visible {
 /* --- Mode-specific battle controls ------------------------------------------- */
 
 #ui[data-mode='campaign'] .skirmish-only,
+#ui[data-mode='online'] .skirmish-only,
+#ui[data-mode='online'] .speed,
 #ui:not([data-mode='campaign']) .campaign-only {
   display: none;
 }
@@ -835,6 +837,13 @@ canvas.sprite {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+
+.lobby-status {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .field {

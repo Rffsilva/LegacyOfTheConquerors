@@ -29,7 +29,7 @@ export class Treasure extends Walker {
       case T.GOLD_BAR:
       case T.SILVER_BAR:
         if (eater.teamNum === 0 || eater.myguy) {
-          world.addScore(eater.teamNum, (this.family === T.GOLD_BAR ? 200 : 50) * level);
+          world.addScore(eater.teamNum, (this.family === T.GOLD_BAR ? 200 : 50) * level, eater);
           this.dead = true;
           world.sound('money', eater);
         }
@@ -76,7 +76,7 @@ export class Treasure extends Walker {
         return this.teleportEater(eater);
       case T.LIFE_GEM:
         if (eater.teamNum !== this.teamNum) return 1;
-        world.addScore(eater.teamNum, this.stats.hitpoints);
+        world.addScore(eater.teamNum, this.stats.hitpoints, eater);
         this.flash();
         this.dead = true;
         this.death();
