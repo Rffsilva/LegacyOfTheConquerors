@@ -2,7 +2,7 @@
 // specialCost[currentSpecial] magic, charged only when it goes off. Like the original this
 // always reports 0 to its caller, which the AI relies on.
 
-import { FxFamily as F, LivingFamily as L, Order, WeaponFamily as W } from '../data/objects.ts';
+import { FxFamily as F, LivingFamily as L, Order, TreasureFamily, WeaponFamily as W } from '../data/objects.ts';
 import { Act, Ani, Bit, Command } from './constants.ts';
 import { idiv, sign } from './math.ts';
 import type { Walker } from './walker.ts';
@@ -36,20 +36,19 @@ const SPECIALS: Partial<Record<number, Special>> = {
   [L.CLERIC]: cleric,
   [L.MAGE]: mage,
   [L.ARCHMAGE]: archmage,
-  [L.FIREELEMENTAL]: (w) => {
-    // Starburst: a fireball in every direction.
-    w.stats.magicpoints += 8 * w.stats.weaponCost;
-    fireAllDirections(w);
-    return true;
-  },
-  [L.SMALL_SLIME]: slimeGrow,
-  [L.MEDIUM_SLIME]: slimeGrow,
+  [L.FIREELEMENTAL]: fireElemental,
+  [L.SMALL_SLIME]: (w) => (w.currentSpecial === 1 ? slimeGrow(w) : slimeAcid(w)),
+  [L.MEDIUM_SLIME]: (w) => (w.currentSpecial === 1 ? slimeGrow(w) : slimeAcid(w)),
   [L.SLIME]: (w) => {
+    if (w.currentSpecial !== 1) return slimeAcid(w);
     w.aniType = Ani.SLIME_SPLIT; // splits when the animation ends
     w.cycle = 0;
     return true;
   },
+  [L.FAERIE]: faerie,
   [L.GHOST]: (w) => {
+    if (w.currentSpecial === 2) return lifeDrain(w);
+    if (w.currentSpecial === 3) return bansheeWail(w);
     const scare = w.world.addOb(Order.FX, F.GHOST_SCARE);
     scare.aniType = Ani.SCARE;
     scare.setxy(w.xpos + idiv(w.sizex, 2) - idiv(scare.sizex, 2), w.ypos + idiv(w.sizey, 2) - idiv(scare.sizey, 2));
@@ -63,6 +62,12 @@ const SPECIALS: Partial<Record<number, Special>> = {
   [L.DRUID]: druid,
   [L.ORC]: orc,
   [L.SKELETON]: (w) => {
+    if (w.currentSpecial === 2) {
+      // Bone storm: bones in every direction.
+      fireAllDirections(w);
+      return true;
+    }
+    if (w.currentSpecial === 3) return raiseTheDead(w);
     // Tunnel: sink into the ground and pop up nearby.
     if (w.aniType === Ani.TELE_OUT || w.aniType === Ani.TELE_IN) return false;
     w.aniType = Ani.TELE_OUT;
@@ -84,6 +89,19 @@ function fireAllDirections(w: Walker, each?: (weapon: Walker) => void): void {
   }
   w.lastx = x;
   w.lasty = y;
+}
+
+/** A small magical blast on a foe (it doesn't hurt the caster). */
+function blastOn(w: Walker, foe: Walker, damage: number): void {
+  const boom = w.world.addOb(Order.FX, F.EXPLOSION);
+  boom.owner = w;
+  boom.teamNum = w.teamNum;
+  boom.stats.level = w.stats.level;
+  boom.stats.setFlag(Bit.MAGICAL, true);
+  boom.damage = damage;
+  boom.centerOn(foe);
+  boom.aniType = Ani.EXPLODE;
+  boom.skipExit = 100; // magical: stays small, spares the caster
 }
 
 /** Magic beyond the special's cost, used to power some spells up. */
@@ -766,6 +784,16 @@ function orc(w: Walker): boolean {
   const world = w.world;
   const s = w.stats;
   const rng = world.rng;
+  if (w.currentSpecial === 3) {
+    // Bloodlust: a war cry that drives nearby allies (and us) into a frenzy.
+    if (w.busy) return false;
+    const allies = world.findFriendsInRange(100, w);
+    for (const ally of [w, ...allies.filter((a) => a !== w)]) ally.bonusRounds += 15 + 2 * s.level;
+    world.sound('roar', w);
+    if (onPlayerTeam(w)) world.notify(`${displayName(w, 'Orc')}: BLOODLUST!`, w);
+    w.busy += 4;
+    return true;
+  }
   if (w.currentSpecial === 1) {
     // Howl: enemies freeze in fear.
     if (w.busy) return false;
@@ -793,6 +821,16 @@ function barbarian(w: Walker): boolean {
   const world = w.world;
   const s = w.stats;
   if (w.currentSpecial < 1 || w.currentSpecial > 4) return true;
+  if (w.currentSpecial === 3) {
+    // Berserk: a battle rage. Twice as fast for a while, shrugging off some wounds.
+    if (w.busy || w.bonusRounds) return false;
+    w.bonusRounds += 20 + 3 * s.level;
+    s.hitpoints = Math.min(s.maxHitpoints, s.hitpoints + idiv(s.maxHitpoints, 4));
+    world.sound('roar', w);
+    if (onPlayerTeam(w)) world.notify(`${displayName(w, 'Barbarian')} goes BERSERK!`, w);
+    w.busy += 2;
+    return true;
+  }
   // Hurl a boulder; special 2 makes it explode.
   if (w.busy) return false;
   const shot = w.fire();
@@ -817,3 +855,168 @@ function barbarian(w: Walker): boolean {
   return true;
 }
 
+
+// --- New skills (not in the original) ---------------------------------------------------
+
+/** Raise the dead: skeletons rise from up to three bloodstains nearby, to fight for us a while. */
+function raiseTheDead(w: Walker): boolean {
+  const world = w.world;
+  const s = w.stats;
+  if (w.busy) return false;
+  const stains = world.fxlist
+    .filter((o) => !o.dead && o.isType(Order.TREASURE, TreasureFamily.STAIN) && w.distanceTo(o) < 100 && world.queryPassable(o.xpos, o.ypos, o))
+    .sort((a, b) => w.distanceTo(a) - w.distanceTo(b))
+    .slice(0, 3);
+  let raised = 0;
+  for (const stain of stains) {
+    const risen = w.doSummon(L.SKELETON, 150 + s.level * 30);
+    if (!risen) break;
+    risen.teamNum = w.teamNum;
+    risen.stats.level = world.rng.random(s.level) + 1;
+    risen.setDifficulty(risen.stats.level);
+    risen.setxy(stain.xpos, stain.ypos);
+    risen.owner = w;
+    stain.dead = true;
+    raised++;
+  }
+  if (!raised) return false;
+  if (w.myguy) w.myguy.exp += 20 * raised;
+  if (onPlayerTeam(w)) world.notify(`${displayName(w, 'Skeleton')} raised ${raised} dead!`, w);
+  w.busy += 10;
+  return true;
+}
+
+function fireElemental(w: Walker): boolean {
+  const world = w.world;
+  const s = w.stats;
+  switch (w.currentSpecial) {
+    case 2: {
+      // Immolate: burst into flame, scorching everyone right next to us.
+      if (w.busy) return false;
+      const foes = world.findFoesInRange(40, w);
+      if (!foes.length) return false;
+      for (const foe of foes) blastOn(w, foe, (s.level + 1) * 10);
+      world.sound('explode', w);
+      w.busy += 6;
+      return true;
+    }
+    case 3: {
+      // Meteor shower: meteors fall on foes all around.
+      if (w.busy) return false;
+      const foes = world.findFoesInRange(200, w).slice(0, 3 + idiv(s.level, 3));
+      if (!foes.length) return false;
+      for (const foe of foes) blastOn(w, foe, (s.level + 2) * 12);
+      if (w.myguy) w.myguy.totalShots += foes.length;
+      world.sound('explode', w);
+      w.busy += 12;
+      return true;
+    }
+    default:
+      // Starburst: a fireball in every direction.
+      s.magicpoints += 8 * s.weaponCost;
+      fireAllDirections(w);
+      return true;
+  }
+}
+
+/** Slimes: acid spray (blobs in every direction), or an acid pool (a poison cloud). */
+function slimeAcid(w: Walker): boolean {
+  const world = w.world;
+  const s = w.stats;
+  if (w.busy) return false;
+  if (!world.findFoesInRange(100, w).length) return false;
+  if (w.currentSpecial === 2) {
+    fireAllDirections(w);
+    w.busy += 4;
+    return true;
+  }
+  const pool = world.addOb(Order.FX, F.CLOUD);
+  pool.ignore = true;
+  pool.lifetime = 40 + 3 * s.level;
+  pool.centerOn(w);
+  pool.invisibilityLeft = 10;
+  pool.aniType = Ani.SPIN;
+  pool.teamNum = w.teamNum;
+  pool.stats.level = s.level;
+  pool.damage = s.level + 1;
+  pool.owner = w;
+  w.busy += 6;
+  return true;
+}
+
+function faerie(w: Walker): boolean {
+  const world = w.world;
+  const s = w.stats;
+  const rng = world.rng;
+  if (w.busy) return false;
+  switch (w.currentSpecial) {
+    case 1: {
+      // Mend: heal the most hurt ally nearby.
+      const hurt = world
+        .findFriendsInRange(80, w)
+        .filter((f) => f !== w && f.order === Order.LIVING && f.stats.hitpoints < f.stats.maxHitpoints)
+        .sort((a, b) => a.stats.hitpoints * b.stats.maxHitpoints - b.stats.hitpoints * a.stats.maxHitpoints)[0];
+      if (!hurt) return false;
+      hurt.stats.hitpoints = Math.min(hurt.stats.maxHitpoints, hurt.stats.hitpoints + 10 + 8 * s.level);
+      if (w.myguy) w.myguy.exp += 5 + s.level;
+      world.sound('heal', w);
+      w.busy += 6;
+      return true;
+    }
+    case 2: {
+      // Sleep dust: enemies close by nod off for a while.
+      const foes = world.findFoesInRange(48 + 4 * s.level, w).filter((f) => f.order === Order.LIVING);
+      if (!foes.length) return false;
+      for (const foe of foes) {
+        const nerve = foe.myguy ? idiv(foe.myguy.constitution, 2) : foe.stats.level;
+        foe.stats.frozenDelay += Math.max(0, 15 + 4 * s.level - rng.random(nerve * 2 + 1));
+      }
+      world.sound('sparkle', w);
+      if (onPlayerTeam(w)) world.notify(`${displayName(w, 'Faerie')} cast Sleep Dust!`, w);
+      w.busy += 8;
+      return true;
+    }
+    default: {
+      // Glamour: nearby allies (and we) fade from sight.
+      const allies = world.findFriendsInRange(80, w).filter((f) => f.order === Order.LIVING);
+      for (const ally of allies.includes(w) ? allies : [w, ...allies]) ally.invisibilityLeft += 30 + 8 * s.level;
+      world.sound('sparkle', w);
+      if (onPlayerTeam(w)) world.notify(`${displayName(w, 'Faerie')} cast Glamour!`, w);
+      w.busy += 10;
+      return true;
+    }
+  }
+}
+
+/** Life drain: steal life from the nearest enemy close by. */
+function lifeDrain(w: Walker): boolean {
+  const world = w.world;
+  const s = w.stats;
+  if (w.busy) return false;
+  const foes = world.findFoesInRange(64, w).filter((f) => f.order === Order.LIVING);
+  if (!foes.length) return false;
+  const victim = foes.reduce((best, foe) => (w.distanceToCenter(foe) < w.distanceToCenter(best) ? foe : best));
+  const amount = 10 + 6 * s.level;
+  blastOn(w, victim, amount);
+  s.hitpoints = Math.min(s.maxHitpoints, s.hitpoints + amount);
+  if (w.myguy) w.myguy.totalShots++;
+  w.busy += 6;
+  return true;
+}
+
+/** Banshee wail: a scream that hurts and stuns every enemy around. */
+function bansheeWail(w: Walker): boolean {
+  const world = w.world;
+  const s = w.stats;
+  if (w.busy) return false;
+  const foes = world.findFoesInRange(80 + 8 * s.level, w).filter((f) => f.order === Order.LIVING);
+  if (!foes.length) return false;
+  for (const foe of foes) {
+    blastOn(w, foe, 10 + 6 * s.level);
+    foe.stats.frozenDelay += 10 + 2 * s.level;
+  }
+  world.sound('roar', w);
+  if (onPlayerTeam(w)) world.notify(`${displayName(w, 'Ghost')} wails!`, w);
+  w.busy += 12;
+  return true;
+}

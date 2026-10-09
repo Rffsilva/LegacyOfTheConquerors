@@ -40,6 +40,7 @@ export const UNITS: UnitHelp[] = [
     specials: [
       { name: 'Hurl Boulder', text: 'Rip up a stone and throw it. Strength decides how far and how hard.' },
       { name: 'Exploding Boulder', text: 'Throw it so hard it explodes on impact, hurting everyone nearby.' },
+      { name: 'Berserk', text: 'New: fly into a battle rage, moving and striking twice as fast for a while and shrugging off a quarter of your wounds.' },
     ],
   },
   {
@@ -135,37 +136,58 @@ export const UNITS: UnitHelp[] = [
     specials: [
       { name: 'Howl', text: 'A howl of rage that freezes nearby enemies in fear.' },
       { name: 'Eat Corpse', text: 'Eat a nearby body to regain health.' },
+      { name: 'Bloodlust', text: 'New: a war cry that drives you and nearby allies into a frenzy, acting twice as fast for a while.' },
     ],
   },
   {
     family: L.SKELETON,
     name: 'Skeleton',
     text: 'Pathetic remains, but blindingly fast. Throws bones.',
-    specials: [{ name: 'Tunnel', text: 'Burrow underground and pop up nearby, even past walls.' }],
+    specials: [
+      { name: 'Tunnel', text: 'Burrow underground and pop up nearby, even past walls.' },
+      { name: 'Bone Storm', text: 'New: hurl bones in every direction at once.' },
+      { name: 'Raise the Dead', text: 'New: skeletons rise from up to three bloodstains nearby to fight for you for a while.' },
+    ],
   },
   {
     family: L.FIREELEMENTAL,
     name: 'Fire Elemental',
     text: 'Strong and quick, hurling flaming meteors. Explodes when it dies.',
-    specials: [{ name: 'Starburst', text: 'Flaming meteors in all directions.' }],
+    specials: [
+      { name: 'Starburst', text: 'Flaming meteors in all directions.' },
+      { name: 'Immolate', text: 'New: burst into flame, scorching every enemy right next to you.' },
+      { name: 'Meteor Shower', text: 'New: meteors fall on several enemies all around.' },
+    ],
   },
   {
     family: L.SMALL_SLIME,
     name: 'Slime',
     text: 'Starts as a small patch of ooze that grows into a big slime, which then splits in two. Weak against fire and magic.',
-    specials: [{ name: 'Grow / Split', text: 'Grow to the next size when there is room; big slimes split into two small ones.' }],
+    specials: [
+      { name: 'Grow / Split', text: 'Grow to the next size when there is room; big slimes split into two small ones.' },
+      { name: 'Acid Spray', text: 'New: spit blobs of acid in every direction.' },
+      { name: 'Acid Pool', text: 'New: leave a pool of acid fumes that poisons enemies in it.' },
+    ],
   },
   {
     family: L.FAERIE,
     name: 'Faerie',
     text: 'A tiny, delicate flyer whose magic powder freezes enemies in place.',
-    specials: [],
+    specials: [
+      { name: 'Mend', text: 'New: heal the most hurt ally nearby.' },
+      { name: 'Sleep Dust', text: 'New: enemies close by fall asleep for a while.' },
+      { name: 'Glamour', text: 'New: you and nearby allies fade from sight for a while.' },
+    ],
   },
   {
     family: L.GHOST,
     name: 'Ghost',
     text: 'Passes through walls and trees. No ranged attack, but a deadly chilling touch.',
-    specials: [{ name: 'Scare', text: 'A wail that sends nearby enemies fleeing.' }],
+    specials: [
+      { name: 'Scare', text: 'A wail that sends nearby enemies fleeing.' },
+      { name: 'Life Drain', text: 'New: steal life from the nearest enemy to heal yourself.' },
+      { name: 'Banshee Wail', text: 'New: a scream that hurts and stuns every enemy around.' },
+    ],
   },
   {
     family: L.ARCHMAGE,

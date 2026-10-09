@@ -264,8 +264,10 @@ export class Living extends Walker {
       case L.FIREELEMENTAL:
       case L.ARCHER:
       case L.GHOST:
-      case L.ORC: {
+      case L.ORC:
+      case L.BARBARIAN: {
         const d = foeDistance();
+        if (this.family === L.BARBARIAN && this.currentSpecial !== 3) return 1; // boulders: as before
         return d !== null && d < 130 ? 1 : 0;
       }
       case L.THIEF:
@@ -287,7 +289,7 @@ export class Living extends Walker {
         return n < 1 || n > 3 ? 1 : 0; // teleport when alone or swamped
       }
       case L.SLIME:
-        return world.numobs < MAXOBS ? 1 : 0;
+        return this.currentSpecial !== 1 || world.numobs < MAXOBS ? 1 : 0;
       case L.CLERIC:
         if (this.currentSpecial === 1) {
           if (world.findFriendsInRange(60, this).length > 1) {
@@ -302,6 +304,8 @@ export class Living extends Walker {
         }
         return 1;
       case L.SKELETON:
+        if (this.currentSpecial === 2) return world.findFoesInRange(100, this).length ? 1 : 0; // bone storm
+        if (this.currentSpecial === 3) return 1; // raise the dead (needs bloodstains nearby)
         return world.findFoesInRange(5 * GRID_SIZE, this).length < 1 ? 1 : 0; // tunnel away
       default:
         return 1;
