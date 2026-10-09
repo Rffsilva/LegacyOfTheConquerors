@@ -1,6 +1,7 @@
 import { deserialize, serialize, type Campaign } from './campaign.ts';
 
-const KEY = 'lotc.campaign.v1';
+/** Its own key: the classic game at the site root shares this browser storage. */
+const KEY = 'lotc-online.campaign.v1';
 
 /** The campaign is kept in this browser's local storage. It may be unavailable (private mode). */
 export function loadCampaign(): Campaign | null {

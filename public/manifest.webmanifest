@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "Legacy of the Conquerors",
-  "short_name": "Conquerors",
+  "name": "Legacy of the Conquerors Online",
+  "short_name": "Conquerors Online",
   "description": "A modern remake of OpenGlad (Gladiator by FSGames): lead a band of gladiators through a campaign of battlefields.",
   "start_url": "./",
   "scope": "./",

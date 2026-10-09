@@ -3,6 +3,12 @@
 **▶ Play now: [rffsilva.github.io/LegacyOfTheConquerors](https://rffsilva.github.io/LegacyOfTheConquerors/)**
 (works in any modern browser, on desktop and phones; install it from the main menu to play offline)
 
+**▶ With friends: [rffsilva.github.io/LegacyOfTheConquerors/online](https://rffsilva.github.io/LegacyOfTheConquerors/online/)**
+(the new version, with online campaigns for invited players)
+
+The site root is the classic game, built from the `classic` branch (tag `v1.0.0`). `main` is the
+new version, published under `/online`.
+
 A modern remake of [OpenGlad](https://github.com/openglad/openglad) — the open-source port of
 FSGames' *Gladiator* — that runs in the browser and on phones. It keeps the original units, combat,
 campaign and team-building, and adds a modern UI, touch controls and responsive scaling.
@@ -33,6 +39,7 @@ npm run dev        # http://localhost:5173 (also reachable from your phone on th
 | `npm test`               | Unit tests, plus integrity checks on the converted data |
 | `npm run convert-assets` | Regenerate `public/assets` from an OpenGlad checkout    |
 | `npm run make-icons`     | Regenerate the app icons in `public/icons`              |
+| `npm run dev:server`     | The online campaign server, locally (Cloudflare Worker) |
 
 Open a specific scenario with `?scen=scen12`.
 
@@ -67,6 +74,30 @@ files, falling back to the `graphics.001` / `levels.001` GladPack archives (the 
 
 The binary formats are documented in [src/formats](src/formats).
 
+## Online campaigns
+
+Online campaigns are shared: everyone you invite keeps their own barracks, team and cash inside
+the campaign, and any field one player opens up is open to all. Battles still run on each
+player's own device and their results are sent to the server (results fought offline are sent
+when the connection comes back). Live co-op battles are the next stage.
+
+The server is a Cloudflare Worker with Durable Objects (`server/`); the rules it applies live in
+`src/online/room.ts`, shared with the game and the tests. Playing online needs the access
+password, which the server checks before handing out a sign-in token.
+
+**Running it locally:**
+
+```bash
+echo 'ACCESS_PASSWORD=letmein' > server/.dev.vars
+npm run dev:server                                         # http://localhost:8787
+VITE_ONLINE_SERVER=http://localhost:8787 npm run dev       # the game, with online campaigns
+```
+
+**Deploying:** the Pages workflow deploys the server too when the repository has these Actions
+secrets: `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" template), `CLOUDFLARE_ACCOUNT_ID`
+and `ONLINE_PASSWORD`. Changing `ONLINE_PASSWORD` signs everyone out; they keep their campaigns
+when they sign in with the new one. Without the secrets, the site builds without online play.
+
 ## Layout
 
 ```
@@ -78,6 +109,8 @@ src/game/      Campaign rules, saving and the app flow between menus and battles
 src/scenes/    Phaser scenes
 src/input/     Camera pan/zoom (mouse, keyboard, touch, pinch)
 src/ui/        HTML overlay UI: battle HUD, menus, barracks, battle report
+src/online/    Online campaigns: the shared rules, messages and the game's connection
+server/        The online campaign server (Cloudflare Worker)
 tools/         Asset converter (runs directly with Node's TypeScript support)
 tests/         Vitest suites
 ```
@@ -89,6 +122,8 @@ tests/         Vitest suites
 3. ~~Campaign: recruiting, training, rewards and saving~~
 4. ~~**Presentation.** Radar, settings, music, field manual~~
 5. ~~**Ship it.** Installable offline web app for desktop and mobile browsers~~
+6. **Online campaigns** (in progress): ~~shared campaigns with invites~~, live co-op battles,
+   reconnection and smoother play on slow connections
 
 ## License and credits
 

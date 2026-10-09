@@ -4,20 +4,17 @@ import type { ScenarioSummary } from '../data/assets.ts';
 import { LivingFamily as L } from '../data/objects.ts';
 import {
   baseStat,
-  dismiss,
-  hire,
   hireCost,
   HIREABLE,
   leaderIndex,
   MAX_TEAM,
   recruit,
-  setLeader,
   STATS,
-  train,
   trainingCost,
   type BattleReport,
   type Campaign,
   type Stat,
+  type TeamOps,
 } from '../game/campaign.ts';
 import type { SpriteBank } from '../render/spriteBank.ts';
 import { DIFFICULTY_LEVELS } from '../sim/constants.ts';
@@ -92,10 +89,20 @@ export interface MenuActions {
   install?: () => void;
   /** Show "Add to Home Screen" instructions (iPhone/iPad). */
   manualInstall?: boolean;
+  /** Online campaigns, when this build has a server to play them on. */
+  online?: () => void;
+}
+
+/** A barracks open on screen; refresh() redraws it after the campaign changed elsewhere. */
+export interface BarracksView {
+  refresh(notice?: string): void;
 }
 
 export interface BarracksActions {
-  changed: () => void;
+  /** Changes the team: local campaigns apply and save, online ones also tell the server. */
+  team: TeamOps;
+  /** Shown under the top bar (online campaigns: who's playing, the invite link). */
+  extra?: HTMLElement;
   settings: () => void;
   help: () => void;
   fight: (scenario: number) => void;
@@ -118,7 +125,7 @@ export class Screens {
     this.root.replaceChildren();
   }
 
-  private show(...content: Node[]): void {
+  show(...content: Node[]): void {
     this.root.hidden = false;
     this.root.replaceChildren(...content);
     this.root.scrollTop = 0;
@@ -162,6 +169,7 @@ export class Screens {
             },
           }, 'New campaign'),
         ),
+        actions.online && h('button', { className: 'pill', onclick: actions.online }, '🌐 Online campaigns (play with friends)'),
         h('button', { className: 'pill', onclick: actions.skirmish }, 'Skirmish (any field, ready-made squad)'),
         h('div', { className: 'segmented' },
           h('button', { className: 'pill', onclick: actions.help }, '📖 Field manual'),
@@ -177,7 +185,7 @@ export class Screens {
 
   // --- Barracks ----------------------------------------------------------------------
 
-  showBarracks(campaign: Campaign, actions: BarracksActions, notice?: string): void {
+  showBarracks(campaign: Campaign, actions: BarracksActions, notice?: string): BarracksView {
     let tab: 'hire' | 'train' = campaign.team.length ? 'train' : 'hire';
     let selected = 0;
     let familyIndex = 0;
@@ -185,7 +193,7 @@ export class Screens {
     let proposal: Guy | null = campaign.team[0]?.clone() ?? null;
     let message = notice ?? '';
 
-    const unlocked = [...new Set([...campaign.completed, campaign.scenario])].sort((a, b) => a - b);
+    const unlockedFields = () => [...new Set([...campaign.completed, ...(campaign.open ?? []), campaign.scenario])].sort((a, b) => a - b);
     let field = campaign.scenario;
     let rendered = false;
 
@@ -230,9 +238,8 @@ export class Screens {
               title: i === leader ? `${name} leads: you start battles in control of them` : `Start battles as ${name}`,
               ariaPressed: String(i === leader),
               onclick: () => {
-                setLeader(campaign, i);
-                actions.changed();
-                message = `${name} will lead the next battle.`;
+                const result = actions.team.setLeader(i);
+                message = result.ok ? `${name} will lead the next battle.` : result.reason;
                 render();
               },
             }, i === leader ? '★' : '☆'),
@@ -260,27 +267,24 @@ export class Screens {
           candidate = recruit(campaign, HIREABLE[familyIndex]);
         }
         if (next.hire) {
-          const result = hire(campaign, candidate);
+          const result = actions.team.hire(candidate);
           message = result.ok ? `${titleCase(candidate.name)} joins your team.` : result.reason;
           if (result.ok) {
-            actions.changed();
             candidate = recruit(campaign, HIREABLE[familyIndex]);
           }
         }
         render();
       }) : this.trainPanel(campaign, selected, proposal, (next) => {
         if (next.train && proposal) {
-          const result = train(campaign, selected, proposal);
+          const result = actions.team.train(selected, proposal);
           message = result.ok ? `${titleCase(proposal.name)} trained.` : result.reason;
-          if (result.ok) actions.changed();
           proposal = campaign.team[selected]?.clone() ?? null;
         }
         if (next.dismiss) {
           const name = campaign.team[selected]?.name ?? '';
           if (!confirm(`Dismiss ${titleCase(name)}? They leave for good and you get nothing back.`)) return;
-          dismiss(campaign, selected);
-          actions.changed();
-          message = `${titleCase(name)} left the team.`;
+          const result = actions.team.dismiss(selected);
+          message = result.ok ? `${titleCase(name)} left the team.` : result.reason;
           selected = Math.min(selected, campaign.team.length - 1);
           proposal = campaign.team[selected]?.clone() ?? null;
           if (!campaign.team.length) tab = 'hire';
@@ -288,6 +292,8 @@ export class Screens {
         render();
       });
 
+      const unlocked = unlockedFields();
+      if (!unlocked.includes(field)) field = campaign.scenario;
       const fieldPicker = h('select', { className: 'picker', ariaLabel: 'Field to fight on', onchange: (e: Event) => (field = Number((e.target as HTMLSelectElement).value)) },
         ...unlocked.map((n) => {
           const o = new Option(`${this.scenarioTitle(n)}${campaign.completed.includes(n) ? ' (won)' : ''}`, String(n));
@@ -304,7 +310,7 @@ export class Screens {
         }, '⚔ To battle'),
       );
 
-      this.show(h('div', { className: 'barracks' }, header, h('p', { className: 'notice', role: 'status' }, message), h('main', {}, team, panel), footer));
+      this.show(h('div', { className: 'barracks' }, header, actions.extra ?? '', h('p', { className: 'notice', role: 'status' }, message), h('main', {}, team, panel), footer));
       if (rendered) {
         this.root.scrollTop = scroll;
         teamList.scrollTop = listScroll;
@@ -313,6 +319,15 @@ export class Screens {
       rendered = true;
     };
     render();
+    return {
+      refresh: (notice) => {
+        if (notice !== undefined) message = notice;
+        selected = Math.max(0, Math.min(selected, campaign.team.length - 1));
+        proposal = campaign.team[selected]?.clone() ?? null;
+        if (!campaign.team.length) tab = 'hire';
+        render();
+      },
+    };
   }
 
   private statRows(guy: Guy, min: (stat: Stat) => number, onChange: () => void): HTMLElement {

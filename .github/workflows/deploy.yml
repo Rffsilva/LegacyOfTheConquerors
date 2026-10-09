@@ -1,4 +1,11 @@
-# Tests, builds and publishes the game to GitHub Pages on every push to main.
+# Builds and publishes the whole site to GitHub Pages:
+#   /         the classic game, built from the `classic` branch
+#   /online/  this branch's version, with online campaigns
+# and deploys the online campaign server to Cloudflare when the repository has its secrets:
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID   to deploy the server
+#   ONLINE_PASSWORD                               the password players need for online play
+# (optional variable ONLINE_SERVER_URL overrides the server address the game connects to).
+# A push to `classic` triggers this workflow too, through that branch's own workflow.
 name: Deploy to GitHub Pages
 
 on:
@@ -17,8 +24,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  server:
     runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,11 +35,56 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm test
-      - run: npm run build
+      - id: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ONLINE_PASSWORD: ${{ secrets.ONLINE_PASSWORD }}
+          SERVER_URL: ${{ vars.ONLINE_SERVER_URL }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::notice::No Cloudflare secrets, so this build has no online play."
+            exit 0
+          fi
+          npx wrangler deploy --config server/wrangler.toml | tee deploy.log
+          if [ -n "$ONLINE_PASSWORD" ]; then
+            printf '%s' "$ONLINE_PASSWORD" | npx wrangler secret put ACCESS_PASSWORD --config server/wrangler.toml
+          else
+            echo "::warning::No ONLINE_PASSWORD secret: nobody can sign in to online play."
+          fi
+          url="${SERVER_URL:-$(grep -o 'https://[^ ]*\.workers\.dev' deploy.log | head -1)}"
+          echo "Online server: ${url:-none}"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Online version (/online)
+        env:
+          VITE_ONLINE_SERVER: ${{ needs.server.outputs.url }}
+        run: npm ci && npm test && npm run build
+      # Checked out after the build above, so its tests don't run twice.
+      - uses: actions/checkout@v4
+        with:
+          ref: classic
+          path: classic
+      - name: Classic game (site root)
+        working-directory: classic
+        run: npm ci && npm test && npm run build
+      - run: |
+          mkdir site
+          cp -r classic/dist/. site/
+          mkdir site/online
+          cp -r dist/. site/online/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: site
 
   deploy:
     needs: build
