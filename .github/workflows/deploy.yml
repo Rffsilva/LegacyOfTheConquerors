@@ -1,43 +1,19 @@
-# Tests, builds and publishes the game to GitHub Pages on every push to main.
-name: Deploy to GitHub Pages
+# The site is built and published from main's workflow, which puts this classic game at the
+# root and main's online version under /online. A push here asks main's workflow to rebuild.
+name: Redeploy site
 
 on:
   push:
-    branches: [main]
+    branches: [classic]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# One deployment at a time; a newer push replaces a queued one.
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  actions: write
 
 jobs:
-  build:
+  redeploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm test
-      - run: npm run build
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - run: gh workflow run deploy.yml --repo "$GITHUB_REPOSITORY" --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
