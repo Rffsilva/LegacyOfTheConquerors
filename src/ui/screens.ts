@@ -102,6 +102,17 @@ export interface BarracksActions {
   menu: () => void;
 }
 
+/**
+ * Switches between the two games published side by side: this classic one at the site root
+ * and the online version under /online.
+ */
+function versionSwitch(): HTMLElement {
+  return h('nav', { className: 'version-switch', ariaLabel: 'Game version' },
+    h('span', { className: 'on', ariaCurrent: 'page', title: 'This version: the original game, single player (plays offline)' }, 'Classic'),
+    h('a', { href: './online/', title: 'The new version: online campaigns with friends' }, 'Online'),
+  );
+}
+
 export class Screens {
   private readonly root: HTMLElement;
   private readonly bank: SpriteBank;
@@ -145,6 +156,7 @@ export class Screens {
     const heroes = h('div', { className: 'menu-heroes' }, ...[L.SOLDIER, L.ARCHER, L.MAGE, L.ELF, L.CLERIC].map((f) => new SpritePreview(this.bank, f, 0, 3).canvas));
     this.show(
       h('div', { className: 'menu' },
+        versionSwitch(),
         heroes,
         h('h1', {}, 'Legacy of the Conquerors'),
         h('p', { className: 'tagline' }, 'A modern remake of OpenGlad (Gladiator by FSGames)'),
