@@ -117,7 +117,7 @@ export type ServerMessage =
  * Players' devices must run the same battle code, or their battles drift apart. Bump this with
  * any change to the simulation or these messages; older games are asked to reload.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /** WebSocket close code for "not allowed in this campaign"; the client stops reconnecting. */
 export const CLOSE_FORBIDDEN = 4003;

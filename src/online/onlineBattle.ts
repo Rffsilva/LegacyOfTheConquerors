@@ -15,12 +15,16 @@ export class OnlineBattle {
   /** Our player number in this battle. */
   readonly you: number;
   private readonly campaign: OnlineCampaign;
-  /** Frames received but not played yet (ticks without changes may be missing). */
+  /** Frames received but not played yet. */
   private readonly frames = new Map<number, Frame>();
-  /** The last tick the server has issued that we know of. */
-  private target = 0;
+  /**
+   * Every tick up to here is known: received, or covered by the server's log (which leaves out
+   * ticks where nothing changed). We never play past it, never guessing a missing tick empty.
+   */
+  private known = 0;
   private lastHeld = -1;
   private heard = performance.now();
+  private resyncAsked = -Infinity;
 
   constructor(campaign: OnlineCampaign, message: BattleMessage, field: FieldOptions) {
     this.campaign = campaign;
@@ -43,7 +47,7 @@ export class OnlineBattle {
 
   /** Ticks we know about but haven't played. */
   get backlog(): number {
-    return this.target - this.lockstep.tick;
+    return this.known - this.lockstep.tick;
   }
 
   /** How long since the server last sent anything for this battle. */
@@ -51,21 +55,27 @@ export class OnlineBattle {
     return performance.now() - this.heard;
   }
 
-  /** New frames from the server; `now` is the last tick issued, when frames skip empty ticks. */
+  /**
+   * New frames from the server. Live ticks come one per tick, none skipped; the log (with
+   * `now`, the last tick it covers) only has the ticks where something changed.
+   */
   add(frames: readonly Frame[], now?: number): void {
-    for (const frame of frames) {
-      if (frame.n > this.lockstep.tick) this.frames.set(frame.n, frame);
-      this.target = Math.max(this.target, frame.n);
-    }
-    if (now !== undefined) this.target = Math.max(this.target, now);
+    for (const frame of frames) if (frame.n > this.lockstep.tick) this.frames.set(frame.n, frame);
+    if (now !== undefined) this.known = Math.max(this.known, now);
+    while (this.frames.has(this.known + 1)) this.known++;
     this.heard = performance.now();
+    // A tick went missing on the way (a dropped connection): ask for the log to fill the gap.
+    if (this.frames.size && Math.max(...this.frames.keys()) > this.known + 1 && performance.now() - this.resyncAsked > 2000) {
+      this.resyncAsked = performance.now();
+      this.campaign.joinBattle();
+    }
   }
 
-  /** Plays the next tick, if the server has issued it. */
+  /** Plays the next tick, if we know it. */
   playOne(): boolean {
     if (this.backlog <= 0 || this.world.outcome) return false;
     const n = this.lockstep.tick + 1;
-    const frame = this.frames.get(n) ?? { n };
+    const frame = this.frames.get(n) ?? { n }; // not received: the log says nothing changed
     this.frames.delete(n);
     this.lockstep.play(frame);
     return true;
