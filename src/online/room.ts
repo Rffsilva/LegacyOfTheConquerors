@@ -22,12 +22,15 @@ import {
   type Survivor,
 } from '../game/campaign.ts';
 import { Guy } from '../sim/guy.ts';
-import type { CampaignInfo, ClientMessage, GuyData, MemberCampaign, PublicMember, SquadEntry, Whereabouts } from './protocol.ts';
+import type { BankEntry, CampaignInfo, ClientMessage, GuyData, MemberCampaign, PublicMember, SquadEntry, Whereabouts } from './protocol.ts';
 
 export const MAX_MEMBERS = 16;
 /** Recent battle reports kept per player, so a result sent twice is applied once. */
 const KEPT_RESULTS = 10;
 const MAX_STAT = 10_000;
+/** Bank deposits and withdrawals everyone can see, newest first. */
+const KEPT_BANK_ENTRIES = 20;
+const MAX_CASH = 1_000_000_000;
 const MAX_LEVEL = 100;
 
 export interface Member {
@@ -46,6 +49,9 @@ export interface RoomState {
   owner: string;
   created: number;
   members: Record<string, Member>;
+  /** The campaign bank: cash any member can put in or take out. (Missing in older campaigns.) */
+  bank?: number;
+  bankLog?: BankEntry[];
 }
 
 export function createRoom(init: { id: string; name: string; difficulty: number; invite: string; owner: string; ownerName: string; now: number }): RoomState {
@@ -148,6 +154,8 @@ export function campaignInfo(state: RoomState, viewer: string, presence: Readonl
     open,
     members,
     field: play?.field ?? Math.max(...open),
+    bank: state.bank ?? 0,
+    bankLog: state.bankLog ?? [],
     battle: battle && {
       id: battle.id,
       scenario: battle.scenario,
@@ -159,9 +167,10 @@ export function campaignInfo(state: RoomState, viewer: string, presence: Readonl
 export type ActResult = { error?: string; report?: BattleReport };
 
 /** Applies one player's action to their barracks. Everything from the client is checked. */
-export function act(state: RoomState, playerId: string, msg: Exclude<ClientMessage, { t: 'where' }>): ActResult {
+export function act(state: RoomState, playerId: string, msg: Exclude<ClientMessage, { t: 'where' }>, now = Date.now()): ActResult {
   const member = state.members[playerId];
   if (!member) return { error: 'You are not in this campaign.' };
+  if (msg.t === 'bank') return bank(state, member, msg.amount, now);
   if (msg.t === 'result') {
     const earlier = member.results.find((r) => r.id === msg.id);
     if (earlier) return { report: earlier.report };
@@ -174,6 +183,24 @@ export function act(state: RoomState, playerId: string, msg: Exclude<ClientMessa
     member.results = [{ id: String(msg.id), report: result.report }, ...member.results].slice(0, KEPT_RESULTS);
   }
   return result;
+}
+
+/**
+ * Moves cash between a player and the campaign bank: a positive amount puts it in, a negative
+ * one takes it out. Every move is in the bank's log, so everyone can see who gave and who took.
+ */
+function bank(state: RoomState, member: Member, amount: unknown, now: number): ActResult {
+  const n = Math.trunc(Number(amount));
+  if (!Number.isFinite(n) || n === 0) return { error: 'Choose an amount.' };
+  const balance = state.bank ?? 0;
+  if (n > member.campaign.money) return { error: `You only have ${member.campaign.money.toLocaleString('en-US')}.` };
+  if (-n > balance) return { error: `The bank only has ${balance.toLocaleString('en-US')}.` };
+  if (n > 0 && balance + n > MAX_CASH) return { error: 'The bank is full.' };
+  if (n < 0 && member.campaign.money - n > MAX_CASH) return { error: 'You can\'t carry that much.' };
+  member.campaign.money -= n;
+  state.bank = balance + n;
+  state.bankLog = [{ name: member.name, amount: n, at: now }, ...(state.bankLog ?? [])].slice(0, KEPT_BANK_ENTRIES);
+  return {};
 }
 
 function apply(view: Campaign, msg: Exclude<ClientMessage, { t: 'where' }>): ActResult {

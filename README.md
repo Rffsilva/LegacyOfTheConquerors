@@ -80,7 +80,8 @@ Online campaigns are shared: everyone you invite keeps their own barracks, team 
 the campaign, and any field one player opens up is open to all. Battles are fought together:
 everyone in the barracks picks **Ready**, and when all of them are, the battle starts for all.
 Friends can join a battle in progress, leave it (their squad fights on under the computer) and
-come back; a dropped connection does the same after 10 seconds.
+come back; a dropped connection does the same after 10 seconds. Each campaign has a **bank**
+(🏦 in the online bar): anyone can put cash in or take it out, and everyone sees who did what.
 
 Each device runs the same battle in lockstep: the simulation is deterministic (integer maths and
 a seeded random generator), so the server only keeps the clock and relays what changed in each

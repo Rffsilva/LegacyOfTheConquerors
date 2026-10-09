@@ -89,6 +89,35 @@ describe('online campaign room', () => {
     expect(memberView(state, OWNER).team[0].name).toBe('SOLDIER1');
   });
 
+  it('shares cash through the campaign bank, and logs who put in and who took out', () => {
+    const state = room();
+    expect(act(state, OWNER, { t: 'bank', amount: 1200 }, 10).error).toBeUndefined();
+    expect(memberView(state, OWNER).money).toBe(3800);
+    expect(act(state, FRIEND, { t: 'bank', amount: -500 }, 20).error).toBeUndefined();
+    expect(memberView(state, FRIEND).money).toBe(5500);
+    const info = campaignInfo(state, FRIEND, new Map());
+    expect(info.bank).toBe(700);
+    expect(info.bankLog).toEqual([
+      { name: 'Irmão', amount: -500, at: 20 },
+      { name: 'Ricardo', amount: 1200, at: 10 },
+    ]);
+  });
+
+  it('refuses bank moves beyond what the player or the bank has', () => {
+    const state = room();
+    expect(act(state, FRIEND, { t: 'bank', amount: -1 }).error).toMatch(/only has 0/);
+    expect(act(state, OWNER, { t: 'bank', amount: 5001 }).error).toMatch(/only have 5,000/);
+    expect(act(state, OWNER, { t: 'bank', amount: 0 }).error).toMatch(/amount/);
+    expect(act(state, OWNER, { t: 'bank', amount: 'lots' as unknown as number }).error).toMatch(/amount/);
+    expect(act(state, OWNER, { t: 'bank', amount: 99.9 }).error).toBeUndefined(); // whole coins only
+    expect(campaignInfo(state, OWNER, new Map()).bank).toBe(99);
+    expect(act(state, 'd'.repeat(32), { t: 'bank', amount: 1 }).error).toMatch(/not in this campaign/);
+    // A campaign from before the bank starts with an empty one.
+    delete state.bank;
+    delete state.bankLog;
+    expect(campaignInfo(state, OWNER, new Map())).toMatchObject({ bank: 0, bankLog: [] });
+  });
+
   it('applies a won battle once, and opens the next field for everyone', () => {
     const state = room();
     hireTwo(state, OWNER);
