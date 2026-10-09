@@ -185,13 +185,19 @@ export class Screens {
 
     const unlocked = [...new Set([...campaign.completed, campaign.scenario])].sort((a, b) => a - b);
     let field = campaign.scenario;
+    let rendered = false;
 
-    const render = () => {
+    /** Redraws the barracks; after the first time, keeps the scroll positions and, with `reveal`, scrolls the panel into view. */
+    const render = (reveal = false) => {
+      const scroll = this.root.scrollTop;
+      const listScroll = this.root.querySelector('.team-list')?.scrollTop ?? 0;
       const header = h('header', { className: 'barracks-top' },
         h('button', { className: 'icon', ariaLabel: 'Main menu', onclick: actions.menu }, '☰'),
         h('h1', {}, 'Barracks'),
-        h('div', { className: 'stat-chip' }, `Cash ${formatNumber(campaign.money)}`),
-        h('div', { className: 'stat-chip' }, `Score ${formatNumber(campaign.score)}`),
+        h('div', { className: 'stat-chips' },
+          h('div', { className: 'stat-chip' }, `Cash ${formatNumber(campaign.money)}`),
+          h('div', { className: 'stat-chip' }, `Score ${formatNumber(campaign.score)}`),
+        ),
         h('button', { className: 'icon', ariaLabel: 'Field manual', onclick: actions.help }, '?'),
         h('button', { className: 'icon', ariaLabel: 'Settings', onclick: actions.settings }, '⚙'),
       );
@@ -207,7 +213,7 @@ export class Screens {
                 selected = i;
                 proposal = guy.clone();
                 message = '';
-                render();
+                render(true);
               },
             },
               new SpritePreview(this.bank, guy.family, 0, 2).canvas,
@@ -226,7 +232,7 @@ export class Screens {
           onclick: () => {
             tab = 'hire';
             message = '';
-            render();
+            render(true);
           },
         }, '+ Hire a recruit'),
       );
@@ -282,6 +288,12 @@ export class Screens {
       );
 
       this.show(h('div', { className: 'barracks' }, header, h('p', { className: 'notice', role: 'status' }, message), h('main', {}, team, panel), footer));
+      if (rendered) {
+        this.root.scrollTop = scroll;
+        teamList.scrollTop = listScroll;
+        if (reveal) panel.scrollIntoView({ block: 'nearest' });
+      }
+      rendered = true;
     };
     render();
   }

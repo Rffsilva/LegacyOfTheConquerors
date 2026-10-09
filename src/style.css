@@ -600,6 +600,23 @@ canvas.sprite {
   flex: 1;
 }
 
+.stat-chips {
+  display: flex;
+  gap: 8px;
+}
+
+/* Narrow screens: the cash and score chips get a row of their own. */
+@media (max-width: 520px) {
+  .barracks-top {
+    flex-wrap: wrap;
+  }
+
+  .stat-chips {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
 .stat-chip {
   padding: 6px 12px;
   font-size: 0.85rem;
@@ -623,7 +640,7 @@ canvas.sprite {
 
 @media (max-width: 720px) {
   .barracks main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .barracks .panel {
