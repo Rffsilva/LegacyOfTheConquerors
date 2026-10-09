@@ -119,6 +119,15 @@ export function dismiss(campaign: Campaign, index: number): void {
   campaign.team.splice(index, 1);
 }
 
+/** Who the player controls when a battle starts: the chosen leader, or else the first in the team. */
+export function leaderIndex(campaign: Campaign): number {
+  return Math.max(0, campaign.team.findIndex((g) => g.leader));
+}
+
+export function setLeader(campaign: Campaign, index: number): void {
+  campaign.team.forEach((g, i) => (g.leader = i === index));
+}
+
 // --- Battles -------------------------------------------------------------------------
 
 export interface LevelUp {
@@ -139,9 +148,15 @@ export interface BattleReport {
   nextScenario: number;
 }
 
-/** Squad for a battle: copies, so a lost battle leaves the campaign untouched. Pass the same array to applyBattle. */
+/**
+ * Squad for a battle: copies, so a lost battle leaves the campaign untouched. Pass the same array
+ * to applyBattle. The leader is always marked, so the battle starts with whoever the barracks shows.
+ */
 export function squadFor(campaign: Campaign): Guy[] {
-  return campaign.team.map((g) => g.clone());
+  const squad = campaign.team.map((g) => g.clone());
+  const leader = squad[leaderIndex(campaign)];
+  if (leader) leader.leader = true;
+  return squad;
 }
 
 /**

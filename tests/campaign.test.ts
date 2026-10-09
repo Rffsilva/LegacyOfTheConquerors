@@ -6,12 +6,15 @@ import { LivingFamily as L, Order, TreasureFamily } from '../src/data/objects.ts
 import {
   applyBattle,
   deserialize,
+  dismiss,
   hire,
   hireCost,
+  leaderIndex,
   MAX_TEAM,
   newCampaign,
   recruit,
   serialize,
+  setLeader,
   squadFor,
   train,
   trainingCost,
@@ -88,6 +91,20 @@ describe('team management', () => {
     expect(c.team[0].strength).toBe(15);
     expect(c.team[0].dexterity).toBe(6);
     expect(c.money).toBeLessThan(before);
+  });
+
+  it('keeps one leader, falling back to the first member', () => {
+    const c = newCampaign();
+    c.money = 1e9;
+    for (let i = 0; i < 3; i++) hire(c, recruit(c, L.SOLDIER));
+    expect(leaderIndex(c)).toBe(0);
+    setLeader(c, 2);
+    setLeader(c, 1);
+    expect(c.team.map((g) => g.leader)).toEqual([false, true, false]);
+    expect(deserialize(serialize(c)).team[1].leader).toBe(true);
+    dismiss(c, 1);
+    expect(leaderIndex(c)).toBe(0);
+    expect(squadFor(c).map((g) => g.leader)).toEqual([true, false]);
   });
 
   it('round-trips through JSON', () => {
