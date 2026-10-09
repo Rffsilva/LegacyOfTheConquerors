@@ -87,6 +87,7 @@ export type ClientMessage =
   | { t: 'train'; index: number; guy: GuyData }
   | { t: 'dismiss'; index: number }
   | { t: 'leader'; index: number }
+  | { t: 'rename'; index: number; name: string }
   | { t: 'where'; where: Whereabouts }
   /** A battle fought on this device. `id` is unique per battle, so a resend is applied once. */
   | { t: 'result'; id: string; scenario: number; par: number; squad: SquadEntry[]; summary: BattleSummary }

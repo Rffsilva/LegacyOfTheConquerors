@@ -9,8 +9,10 @@ import {
   hire,
   HIREABLE,
   MAX_TEAM,
+  cleanName,
   newCampaign,
   RECORD_FIELDS,
+  rename,
   setLeader,
   STATS,
   train,
@@ -201,6 +203,8 @@ function apply(view: Campaign, msg: Exclude<ClientMessage, { t: 'where' }>): Act
       if (!view.team[msg.index]) return { error: 'No such team member.' };
       setLeader(view, msg.index);
       return {};
+    case 'rename':
+      return failed(rename(view, msg.index, String(msg.name ?? '')));
     case 'result':
       return applyResult(view, msg);
     default:
@@ -272,10 +276,8 @@ function int(value: unknown, min: number, max: number): number {
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min;
 }
 
-/** Unit names are like the original's: up to 11 plain capitals. */
 function cleanGuyName(name: unknown, fallback: string): string {
-  const clean = String(name ?? '').toUpperCase().replace(/[^\x20-\x7E]/g, '').trim().slice(0, 11);
-  return clean || fallback;
+  return cleanName(name) || fallback;
 }
 
 /** Player and campaign names: any letters, no control characters, a sensible length. */

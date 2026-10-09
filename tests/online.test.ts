@@ -79,6 +79,16 @@ describe('online campaign room', () => {
     expect(memberView(state, OWNER).team.map((g) => g.name)).toEqual(['ELF1']);
   });
 
+  it('renames team members, keeping names like the original\'s', () => {
+    const state = room();
+    hireTwo(state, OWNER);
+    expect(act(state, OWNER, { t: 'rename', index: 1, name: 'Légolas the Great' }).error).toBeUndefined();
+    expect(memberView(state, OWNER).team[1].name).toBe('LGOLAS THE '); // plain capitals, 11 at most
+    expect(act(state, OWNER, { t: 'rename', index: 0, name: '  ' }).error).toMatch(/at least one/);
+    expect(act(state, OWNER, { t: 'rename', index: 9, name: 'Bob' }).error).toMatch(/No such/);
+    expect(memberView(state, OWNER).team[0].name).toBe('SOLDIER1');
+  });
+
   it('applies a won battle once, and opens the next field for everyone', () => {
     const state = room();
     hireTwo(state, OWNER);
