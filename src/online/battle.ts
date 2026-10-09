@@ -2,6 +2,7 @@
 // turns players' inputs into frames (see lockstep.ts). Plain data and functions, so the
 // Durable Object stays a thin layer of sockets and timers, and the tests can drive it directly.
 
+import { ARENA_FIELD, isArena } from '../game/arena.ts';
 import { applyBattleSummary, squadFor, type BattleReport, type BattleSummary } from '../game/campaign.ts';
 import { PRESSES, type BattleEvent, type BattleSetup, type Frame } from './lockstep.ts';
 import type { GuyData, Whereabouts } from './protocol.ts';
@@ -31,6 +32,8 @@ export interface BattlePlayer {
   away: boolean;
   /** They chose to leave (rather than losing connection). */
   left: boolean;
+  /** The arena: their run is over and settled (they left with their rewards, or their squad fell). */
+  done?: boolean;
 }
 
 export interface ServerBattle {
@@ -49,9 +52,14 @@ export function newLobby(state: RoomState): Lobby {
   return { field: Math.max(...openFields(state)), ready: new Set() };
 }
 
+/** Can the campaign fight on this field? Its open fields, and the arena (always open). */
+export function fieldOpen(state: RoomState, field: number): boolean {
+  return field === ARENA_FIELD || openFields(state).includes(field);
+}
+
 /** Changes the field everyone is getting ready for; readiness starts over. Returns why not, or null. */
 export function chooseField(state: RoomState, lobby: Lobby, field: number): string | null {
-  if (!openFields(state).includes(field)) return `Field ${field} is not open yet.`;
+  if (!fieldOpen(state, field)) return `Field ${field} is not open yet.`;
   if (lobby.field !== field) lobby.ready.clear();
   lobby.field = field;
   return null;
@@ -93,6 +101,12 @@ export function startBattle(state: RoomState, lobby: Lobby, playerIds: string[],
 
 export function playerIndex(battle: ServerBattle, playerId: string): number {
   return battle.players.findIndex((p) => p.id === playerId);
+}
+
+/** Is the player's squad in this battle (and, in the arena, their run not yet over)? */
+export function fighting(battle: ServerBattle, playerId: string): boolean {
+  const p = battle.players[playerIndex(battle, playerId)];
+  return !!p && !p.done;
 }
 
 /**
@@ -160,18 +174,40 @@ export function nextFrame(battle: ServerBattle): Frame {
 export function applyBattleResults(state: RoomState, battle: ServerBattle, par: number, summaries: readonly (BattleSummary | null)[]): Map<string, BattleReport> {
   const reports = new Map<string, BattleReport>();
   battle.players.forEach((p, i) => {
-    const summary = summaries[i];
-    const member = state.members[p.id];
-    if (!summary || !member) return;
-    const view = memberView(state, p.id);
-    if (!sameSquad(view.team, battle.squads[i])) return;
-    view.scenario = battle.setup.scenario;
-    const report = applyBattleSummary(view, cleanSummary(summary, view.team), view.team, Math.max(1, Math.min(1000, Math.trunc(par) || 1)));
-    member.campaign = toMemberCampaign(view);
-    member.results = [{ id: battle.setup.id, report }, ...member.results].slice(0, 10);
-    reports.set(p.id, report);
+    const report = applyResult(state, battle, i, par, summaries[i]);
+    if (report) reports.set(p.id, report);
   });
   return reports;
+}
+
+/** One player's result. The arena settles each run as it ends, and only once. */
+function applyResult(state: RoomState, battle: ServerBattle, player: number, par: number, summary: BattleSummary | null | undefined): BattleReport | null {
+  const p = battle.players[player];
+  const member = p && state.members[p.id];
+  if (!summary || !member || p.done) return null;
+  const view = memberView(state, p.id);
+  if (!sameSquad(view.team, battle.squads[player])) return null;
+  const arena = isArena(battle.setup.scenario);
+  if (!arena) view.scenario = battle.setup.scenario;
+  const clean = cleanSummary(summary, view.team);
+  if (arena) clean.arena = Math.max(0, Math.trunc(Number(summary.arena)) || 0);
+  else delete clean.arena;
+  const report = applyBattleSummary(view, clean, view.team, Math.max(1, Math.min(1000, Math.trunc(par) || 1)));
+  member.campaign = toMemberCampaign(view);
+  member.results = [{ id: battle.setup.id, report }, ...member.results].slice(0, 10);
+  if (arena) p.done = true;
+  return report;
+}
+
+/**
+ * The arena: a player's run is over (they left with their rewards, or their squad fell).
+ * Settles it now, and they're out of the battle. Returns their report (null if already settled).
+ */
+export function settleArenaRun(state: RoomState, battle: ServerBattle, player: number, par: number, summary: BattleSummary | null): BattleReport | null {
+  if (!isArena(battle.setup.scenario)) return null;
+  const report = applyResult(state, battle, player, par, summary);
+  if (report) leaveBattle(battle, player, true);
+  return report;
 }
 
 /** Everyone has chosen to leave: the battle is over, with nothing won or lost. */

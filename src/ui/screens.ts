@@ -1,6 +1,7 @@
 // Full-screen menus outside battle: main menu, barracks (hire and train) and battle report.
 
 import type { ScenarioSummary } from '../data/assets.ts';
+import { ARENA_FIELD, ARENA_TITLE, isArena } from '../game/arena.ts';
 import { LivingFamily as L } from '../data/objects.ts';
 import {
   baseStat,
@@ -150,6 +151,7 @@ export class Screens {
   }
 
   scenarioTitle(n: number): string {
+    if (isArena(n)) return `⚔ ${ARENA_TITLE}`;
     const s = this.scenarios.find((x) => x.id === `scen${n}`);
     return s?.title ? `#${n} · ${titleCase(s.title)}` : `Field ${n}`;
   }
@@ -212,7 +214,8 @@ export class Screens {
     let proposal: Guy | null = campaign.team[0]?.clone() ?? null;
     let message = notice ?? '';
 
-    const unlockedFields = () => [...new Set([...campaign.completed, ...(campaign.open ?? []), campaign.scenario])].sort((a, b) => a - b);
+    // The campaign's fields, then the arena (always open).
+    const unlockedFields = () => [...[...new Set([...campaign.completed, ...(campaign.open ?? []), campaign.scenario])].sort((a, b) => a - b), ARENA_FIELD];
     let field = campaign.scenario;
     let rendered = false;
 
@@ -448,8 +451,20 @@ export class Screens {
   showReport(report: BattleReport, onContinue: () => void): void {
     const won = report.outcome.result === 'victory';
     const retreat = report.outcome.result === 'retreat';
-    const title = won ? 'Victory!' : retreat ? 'Withdrawn' : 'Defeat';
-    const lines: (HTMLElement | false)[] = won
+    const arena = report.arena;
+    const title = arena ? (won ? `${ARENA_TITLE}: ${arena.rounds} round${arena.rounds === 1 ? '' : 's'} won` : `${ARENA_TITLE}: your squad fell`) : won ? 'Victory!' : retreat ? 'Withdrawn' : 'Defeat';
+    const lines: (HTMLElement | false)[] = arena
+      ? won
+        ? [
+            h('p', {}, 'You left the arena with your rewards.'),
+            h('dl', { className: 'report-numbers' },
+              h('dt', {}, 'Score'), h('dd', {}, formatNumber(report.score)),
+              h('dt', {}, 'Rounds bonus'), h('dd', {}, formatNumber(arena.bonus)),
+              h('dt', {}, 'Cash earned'), h('dd', {}, formatNumber(report.cash)),
+            ),
+          ]
+        : [h('p', {}, `${arena.rounds ? `After ${arena.rounds} round${arena.rounds === 1 ? '' : 's'} won, your squad fell before it could leave.` : 'Your squad fell before winning a round.'} The run earns nothing; your team returns as it was before the arena.`)]
+      : won
       ? [
           report.alreadyWon && h('p', {}, 'Field already won: no time bonus.'),
           h('dl', { className: 'report-numbers' },
@@ -470,7 +485,7 @@ export class Screens {
             ),
           ),
         report.fallen.length > 0 && h('p', { className: 'fallen' }, `Fallen: ${report.fallen.map(titleCase).join(', ')}`),
-        won && h('p', {}, `Next: ${this.scenarioTitle(report.nextScenario)}`),
+        won && !arena && h('p', {}, `Next: ${this.scenarioTitle(report.nextScenario)}`),
         h('button', { className: 'pill primary', onclick: onContinue }, 'Back to the barracks'),
       ),
     );

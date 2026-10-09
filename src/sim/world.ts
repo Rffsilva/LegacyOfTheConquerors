@@ -37,6 +37,14 @@ export type Outcome =
   /** Withdrew through an exit to a field already won; nothing is gained or lost. */
   | { result: 'retreat'; exitTo: number };
 
+/**
+ * Rules for a battle that isn't won by clearing the field (the arena): called after every
+ * tick, they decide when the battle ends, and may add foes.
+ */
+export interface WorldRules {
+  tick(world: World): void;
+}
+
 export interface WorldOptions {
   map: MapGrid;
   objects: readonly ScenarioObject[];
@@ -58,6 +66,8 @@ export interface WorldOptions {
   completed?: readonly number[];
   /** This field was won before: only the squad, exits and teleporters remain (game.cpp). */
   alreadyWon?: boolean;
+  /** Replaces the usual end of battle (victory when the field is clear, defeat when the squad falls). */
+  rules?: WorldRules;
 }
 
 export class World {
@@ -93,8 +103,11 @@ export class World {
   searchCounter = 0;
   events: WorldEvent[] = [];
   readonly players: PlayerController[];
+  /** Each player's squad as it entered the battle (the units' records point into these). */
+  readonly squads: (readonly Guy[])[] = [];
   /** Several players, each with their own squad (an online battle). */
   readonly multiplayer: boolean;
+  readonly rules: WorldRules | null;
   private readonly completed: ReadonlySet<number>;
   private idCounter = 0;
 
@@ -109,6 +122,7 @@ export class World {
     this.rng = new Rng(options.seed ?? 1);
     this.difficultyPercent = DIFFICULTY_LEVELS[options.difficulty ?? DEFAULT_DIFFICULTY];
     this.scenarioType = options.scenarioType ?? 0;
+    this.rules = options.rules ?? null;
 
     for (const ob of options.objects) this.placeScenarioObject(ob);
     // game.cpp: scale every placed object by its level and the difficulty.
@@ -145,6 +159,7 @@ export class World {
 
   /** game.cpp: turn each squad member into a unit and put it on a team marker. */
   private placeSquad(squad: readonly Guy[], player: number): void {
+    this.squads[player] = squad;
     for (const guy of squad) {
       const unit = this.squadUnit(guy, player);
       const marker = this.firstOf(Order.SPECIAL, SpecialFamily.RESERVED_TEAM, guy.teamnum) ?? this.firstOf(Order.SPECIAL, SpecialFamily.RESERVED_TEAM);
@@ -162,6 +177,7 @@ export class World {
    * (or anywhere, if none is left), and they take control of it.
    */
   addSquad(player: number, squad: readonly Guy[]): void {
+    this.squads[player] = squad;
     const ally =
       this.players.map((p) => p.control).find((c) => c && !c.dead) ??
       this.oblist.find((o) => !o.dead && o.order === Order.LIVING && o.teamNum === this.myTeam && o.squad >= 0);
@@ -558,6 +574,11 @@ export class World {
     for (const ob of this.allObjects()) ob.drawcycle = (ob.drawcycle + 1) & 0xff;
     this.cleanup();
 
+    if (this.rules) {
+      this.players.forEach((p, i) => p.update(inputs[i] ?? NO_INPUT));
+      this.rules.tick(this);
+      return;
+    }
     if (this.levelDone === 2) this.outcome ??= { result: 'victory' };
     if (this.outcome) return;
 

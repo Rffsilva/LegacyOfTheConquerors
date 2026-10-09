@@ -183,6 +183,8 @@ export interface BattleReport {
   fallen: string[];
   levelUps: LevelUp[];
   nextScenario: number;
+  /** An arena run: the rounds won, and the bonus they paid. */
+  arena?: { rounds: number; bonus: number };
 }
 
 /**
@@ -214,6 +216,13 @@ export interface BattleSummary {
    * twice from the same member, as in the original, where each half joined the team.
    */
   survivors: Survivor[];
+  /** An arena run: the rounds won before leaving (or falling). */
+  arena?: number;
+}
+
+/** Gold the arena pays on top of the score, for the rounds won: 50, 150, 300, 500... */
+export function arenaBonus(rounds: number): number {
+  return 25 * rounds * (rounds + 1);
 }
 
 /** A battle's summary for one squad; online, `player` picks whose squad (and score) it is. */
@@ -250,8 +259,10 @@ export function applyBattle(campaign: Campaign, world: World, squad: readonly Gu
  */
 export function applyBattleSummary(campaign: Campaign, summary: BattleSummary, squad: readonly Guy[], par: number): BattleReport {
   const outcome = summary.outcome;
-  const alreadyWon = campaign.completed.includes(campaign.scenario);
+  const arena = summary.arena !== undefined;
+  const alreadyWon = !arena && campaign.completed.includes(campaign.scenario);
   const report: BattleReport = { outcome, alreadyWon, score: 0, cash: 0, timeBonus: 0, fallen: [], levelUps: [], nextScenario: campaign.scenario };
+  if (arena) report.arena = { rounds: summary.arena!, bonus: 0 };
 
   if (outcome.result === 'retreat') {
     campaign.scenario = report.nextScenario = outcome.exitTo;
@@ -261,10 +272,15 @@ export function applyBattleSummary(campaign: Campaign, summary: BattleSummary, s
 
   const { score, ticks } = summary;
   let bonus = Math.trunc((score * (TIME_BONUS + par * LEVEL_BONUS - ticks)) / (TIME_BONUS + Math.trunc((par * LEVEL_BONUS) / 2)));
-  if (bonus < 0 || ticks > TIME_BONUS || alreadyWon) bonus = 0;
+  if (bonus < 0 || ticks > TIME_BONUS || alreadyWon || arena) bonus = 0;
   report.score = score;
   report.cash = score * 2 + bonus;
   report.timeBonus = bonus;
+  if (report.arena) {
+    // The arena pays for the rounds won instead of for speed.
+    report.arena.bonus = arenaBonus(report.arena.rounds);
+    report.cash += report.arena.bonus;
+  }
   campaign.score += score;
   campaign.money += report.cash;
 
@@ -292,6 +308,7 @@ export function applyBattleSummary(campaign: Campaign, summary: BattleSummary, s
   }
   campaign.team = survivors.slice(0, MAX_TEAM);
 
+  if (arena) return report; // the campaign's own fields are untouched
   if (!alreadyWon) campaign.completed.push(campaign.scenario);
   campaign.scenario = report.nextScenario = outcome.exitTo ?? campaign.scenario + 1;
   return report;

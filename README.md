@@ -24,6 +24,7 @@ the 53 fields with a ready-made squad.
 - **Combat:** a faithful, deterministic port of OpenGlad's simulation, including every special ability
 - **Controls:** keyboard, gamepad and on-screen touch controls; press **?** in battle for the list
 - **Campaign:** hiring, training, rewards, levelling and permanent losses, saved in the browser
+- **The Arena:** endless rounds of ever harder foes, alone or with friends online; leave every 5 rounds with your winnings, or risk them and fight on
 
 ## Getting started
 
@@ -80,7 +81,10 @@ Online campaigns are shared: everyone you invite keeps their own barracks, team 
 the campaign, and any field one player opens up is open to all. Battles are fought together:
 everyone in the barracks picks **Ready**, and when all of them are, the battle starts for all.
 Friends can join a battle in progress, leave it (their squad fights on under the computer) and
-come back; a dropped connection does the same after 10 seconds. Each campaign has a **bank**
+come back; a dropped connection does the same after 10 seconds. Any campaign can also go to
+**the Arena**: waves of foes in rounds, each harder than the last, with no end. Every 5 rounds
+each player chooses to leave with the gold and experience earned so far, or fight on; a squad
+that falls before leaving earns nothing from the run. Each campaign has a **bank**
 (🏦 in the online bar): anyone can put cash in or take it out, and everyone sees who did what.
 
 Each device runs the same battle in lockstep: the simulation is deterministic (integer maths and

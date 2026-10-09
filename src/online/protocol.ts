@@ -112,7 +112,11 @@ export type ClientMessage =
   /** Buttons held now, plus any pressed since the last message (see lockstep.ts). */
   | { t: 'input'; code: number }
   /** The battle is over on this device: every player's summary, by player number. */
-  | { t: 'battle-result'; id: string; par: number; summaries: (BattleSummary | null)[] };
+  | { t: 'battle-result'; id: string; par: number; summaries: (BattleSummary | null)[] }
+  /** The arena, at a checkpoint: leave with your rewards, or fight on. */
+  | { t: 'arena-choice'; leave: boolean }
+  /** The arena: one player's run is over (they left, or their squad fell), as this device saw it. */
+  | { t: 'arena-done'; id: string; player: number; par: number; summary: BattleSummary };
 
 export type ServerMessage =
   | { t: 'state'; campaign: CampaignInfo; you: MemberCampaign }
@@ -130,7 +134,7 @@ export type ServerMessage =
  * Players' devices must run the same battle code, or their battles drift apart. Bump this with
  * any change to the simulation or these messages; older games are asked to reload.
  */
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 
 /** WebSocket close code for "not allowed in this campaign"; the client stops reconnecting. */
 export const CLOSE_FORBIDDEN = 4003;

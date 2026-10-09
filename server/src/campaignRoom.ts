@@ -11,6 +11,8 @@ import {
   AWAY_AFTER_MS,
   chooseField,
   everyoneLeft,
+  fieldOpen,
+  fighting,
   joinBattle,
   leaveBattle,
   newLobby,
@@ -18,12 +20,14 @@ import {
   playerIndex,
   readyToStart,
   setInput,
+  settleArenaRun,
   startBattle,
   type Lobby,
   type ServerBattle,
 } from '../../src/online/battle.ts';
 import type { Frame } from '../../src/online/lockstep.ts';
 import { CLOSE_FORBIDDEN, PROTOCOL_VERSION, type ClientMessage, type ServerMessage, type Whereabouts } from '../../src/online/protocol.ts';
+import { ARENA_FIELD, isArena } from '../../src/game/arena.ts';
 import { act, campaignInfo, createRoom, joinRoom, memberView, openFields, toMemberCampaign, type RoomState } from '../../src/online/room.ts';
 import type { Env } from './env.ts';
 
@@ -146,6 +150,7 @@ export class CampaignRoom extends DurableObject<Env> {
 
       case 'battle-join': {
         if (!battle) return this.refuse(ws, 'That battle is over.');
+        if (playerIndex(battle, playerId) >= 0 && !fighting(battle, playerId)) return this.refuse(ws, 'Your arena run is over. Wait for your friends to finish theirs.');
         if (playerIndex(battle, playerId) < 0 && !state.members[playerId]?.campaign.team.length) {
           return this.refuse(ws, 'Hire someone before you go to battle.');
         }
@@ -166,6 +171,31 @@ export class CampaignRoom extends DurableObject<Env> {
         }
         return;
 
+      case 'arena-choice': {
+        const player = battle ? playerIndex(battle, playerId) : -1;
+        if (battle && player >= 0 && fighting(battle, playerId) && isArena(battle.setup.scenario)) {
+          battle.pending.push({ t: 'choice', player, leave: msg.leave === true });
+        }
+        return;
+      }
+
+      case 'arena-done': {
+        // Every device says so: the first settles the run, the rest change nothing.
+        const player = Math.trunc(Number(msg.player));
+        if (!battle || msg.id !== battle.setup.id || playerIndex(battle, playerId) < 0 || !battle.players[player]) return;
+        const report = settleArenaRun(state, battle, player, Number(msg.par), msg.summary ?? null);
+        if (!report) return;
+        await this.save();
+        const settled = battle.players[player].id;
+        for (const socket of this.ctx.getWebSockets()) {
+          const a = socket.deserializeAttachment() as Attachment | null;
+          if (a?.playerId === settled) send(socket, { t: 'report', id: battle.setup.id, report });
+        }
+        if (everyoneLeft(battle)) this.endBattle('Everyone has left the arena.');
+        this.broadcast();
+        return;
+      }
+
       case 'battle-result': {
         if (!battle || msg.id !== battle.setup.id || playerIndex(battle, playerId) < 0) return;
         const reports = applyBattleResults(state, battle, Number(msg.par), Array.isArray(msg.summaries) ? msg.summaries : []);
@@ -182,7 +212,7 @@ export class CampaignRoom extends DurableObject<Env> {
 
       default: {
         // Barracks changes: not while your squad is out fighting.
-        if (battle && playerIndex(battle, playerId) >= 0) return this.refuse(ws, 'Your squad is in battle. Changes wait until it ends.');
+        if (battle && fighting(battle, playerId)) return this.refuse(ws, 'Your squad is in battle. Changes wait until it ends.');
         const result = act(state, playerId, msg);
         if (result.error) {
           send(ws, { t: 'error', reason: result.error, id: msg.t === 'result' ? msg.id : undefined });
@@ -235,7 +265,7 @@ export class CampaignRoom extends DurableObject<Env> {
     const state = this.state;
     if (!state || this.battle) return;
     const lobby = this.lobby(leaving);
-    if (!openFields(state).includes(lobby.field)) lobby.field = Math.max(...openFields(state));
+    if (!fieldOpen(state, lobby.field)) lobby.field = Math.max(...openFields(state));
     const players = readyToStart(state, lobby, this.presence(leaving));
     if (!players?.every((id) => state.members[id].campaign.team.length)) return;
     const seed = crypto.getRandomValues(new Uint32Array(1))[0];
@@ -373,7 +403,7 @@ export class CampaignRoom extends DurableObject<Env> {
     const play = {
       field: lobby.field,
       ready: lobby.ready,
-      battle: battle && { id: battle.setup.id, scenario: battle.setup.scenario, players: battle.players },
+      battle: battle && { id: battle.setup.id, scenario: battle.setup.scenario, players: battle.players.filter((p) => !p.done) },
     };
     send(ws, { t: 'state', campaign: campaignInfo(state, playerId, presence, play), you: toMemberCampaign(memberView(state, playerId)) });
   }
@@ -391,7 +421,7 @@ function cleanWhere(where: unknown): Whereabouts {
   const w = where as Whereabouts | undefined;
   if (w?.at === 'battle') {
     const scenario = Math.trunc(Number(w.scenario));
-    if (scenario >= 1 && scenario <= 999) return { at: 'battle', scenario };
+    if (scenario >= 1 && scenario <= ARENA_FIELD) return { at: 'battle', scenario };
   }
   return { at: 'barracks' };
 }

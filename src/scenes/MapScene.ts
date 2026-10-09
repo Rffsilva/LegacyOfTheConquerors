@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import type { ScenarioAsset } from '../data/assets.ts';
 import { Order } from '../data/objects.ts';
 import { GRID_SIZE } from '../data/tiles.ts';
-import { applyBattleSummary, type BattleReport, type Campaign } from '../game/campaign.ts';
+import { ArenaRules, arenaScenario, CHECKPOINT, isArena } from '../game/arena.ts';
+import { applyBattleSummary, arenaBonus, type BattleReport, type Campaign } from '../game/campaign.ts';
 import { services } from '../game/services.ts';
 import { soundKey } from '../game/sounds.ts';
 import { music } from '../audio/music.ts';
@@ -21,6 +22,7 @@ import { World, type Outcome } from '../sim/world.ts';
 import { Radar } from '../ui/radar.ts';
 import { openHelp } from '../ui/helpDialog.ts';
 import { openSettings } from '../ui/settingsDialog.ts';
+import { formatNumber } from '../ui/dom.ts';
 import { viewerUi } from '../ui/viewerUi.ts';
 
 export interface OnlineBattleConfig {
@@ -80,6 +82,14 @@ export class MapScene extends Phaser.Scene {
   /** Online: the server says the battle is over; we finish the ticks we have first. */
   private endedBecause: string | null = null;
   private lastToast = 0;
+  /** The arena's rules, when this battle is in the arena. */
+  private arena: ArenaRules | null = null;
+  /** Online arena: the checkpoint round we've sent our choice for. */
+  private arenaChoiceSent = 0;
+  /** Online arena: players whose run is over that we've told the server about. */
+  private arenaReported = new Set<number>();
+  /** Online arena: our run is over and we chose to watch our friends fight on. */
+  private arenaWatching = false;
 
   constructor() {
     super('map');
@@ -95,16 +105,20 @@ export class MapScene extends Phaser.Scene {
     this.online = undefined;
     this.localReport = this.serverReport = null;
     this.endedBecause = null;
+    this.arena = null;
+    this.arenaChoiceSent = 0;
+    this.arenaReported = new Set();
+    this.arenaWatching = false;
     if (data.online) this.running = true;
   }
 
   preload(): void {
     const key = this.cacheKey();
-    if (!this.cache.json.exists(key)) this.load.json(key, `assets/scenarios/${this.config.id}.json`);
+    if (!isArena(this.config.id) && !this.cache.json.exists(key)) this.load.json(key, `assets/scenarios/${this.config.id}.json`);
   }
 
   create(): void {
-    const scenario = this.cache.json.get(this.cacheKey()) as ScenarioAsset;
+    const scenario = isArena(this.config.id) ? arenaScenario() : (this.cache.json.get(this.cacheKey()) as ScenarioAsset);
     const { textures, spriteInfo } = services();
 
     const field = { map: scenario.map, objects: scenario.objects, scenarioType: scenario.type, spriteInfo };
@@ -120,8 +134,10 @@ export class MapScene extends Phaser.Scene {
         completed: this.config.completed,
         alreadyWon: this.config.alreadyWon,
         difficulty: this.config.difficulty,
+        rules: isArena(this.config.id) ? new ArenaRules() : undefined,
       });
     }
+    this.arena = this.world.rules instanceof ArenaRules ? this.world.rules : null;
     this.par = scenario.par ?? (Number(scenario.id.replace('scen', '')) || 1);
 
     const { width, height } = scenario.map;
@@ -228,12 +244,8 @@ export class MapScene extends Phaser.Scene {
       if (ticks === MAX_TICKS_PER_FRAME) this.accumulator = 0;
       // Read afresh: TypeScript can't see that tick() may have ended the battle.
       const outcome: Outcome | null = this.world!.outcome;
-      if (outcome) {
-        this.running = false;
-        keepAwake(false);
-        music.play(outcome.result === 'victory' ? 'victory' : 'defeat');
-        viewerUi().showOutcome(outcome);
-      }
+      if (outcome) this.localOutcome(outcome);
+      else this.updateArena();
     }
     // The HUD and radar refresh on a timer, so they also follow the camera while paused.
     this.hudTimer += delta;
@@ -246,6 +258,14 @@ export class MapScene extends Phaser.Scene {
     const control = this.followed();
     const image = control ? view.imageFor(control) : undefined;
     if (image) this.controls?.follow(image.x + image.width / 2, image.y + image.height / 2);
+  }
+
+  /** The battle on this device is over: stop, and show how it went. */
+  private localOutcome(outcome: Outcome): void {
+    this.running = false;
+    keepAwake(false);
+    music.play(outcome.result === 'victory' ? 'victory' : 'defeat');
+    viewerUi().showOutcome(outcome, this.arenaEnding(0));
   }
 
   /** Our unit, and (online) the units our friends control right now. */
@@ -272,6 +292,114 @@ export class MapScene extends Phaser.Scene {
     const you = this.online.you;
     const living = world.oblist.filter((o) => !o.dead && o.order === Order.LIVING && o.squad >= 0);
     return living.find((o) => o.squad === you) ?? living.find((o) => o.user !== -1) ?? living[0] ?? null;
+  }
+
+  // --- The arena ----------------------------------------------------------------------
+
+  /** The arena's progress for the HUD. */
+  private arenaStatus(arena: ArenaRules, world: World): string {
+    switch (arena.phase) {
+      case 'fight':
+        return `Round ${arena.round} · ${world.remainingFoes(world.myTeam)} foes left`;
+      case 'checkpoint':
+        return `Round ${arena.round} won · checkpoint`;
+      case 'break':
+        return arena.round ? `Round ${arena.round} won · get ready` : 'The arena · get ready';
+      default:
+        return `${arena.cleared} rounds won`;
+    }
+  }
+
+  /** How the arena ended for this player, for the outcome panel. */
+  private arenaEnding(player: number): string | undefined {
+    const arena = this.arena;
+    if (!arena) return undefined;
+    const rounds = `${arena.cleared} round${arena.cleared === 1 ? '' : 's'}`;
+    return arena.standing(player) === 'banked'
+      ? `You left the arena after ${rounds}, with your gold and experience.`
+      : `Your squad fell in round ${arena.round}. The run earns nothing; your team returns as it was.`;
+  }
+
+  /** Gold this player would take home from the arena right now. */
+  private arenaGold(arena: ArenaRules, world: World, player: number): number {
+    const score = this.online ? (world.playerScore[player] ?? 0) : world.score[0];
+    return score * 2 + arenaBonus(arena.cleared);
+  }
+
+  /** The arena's checkpoint choice, and (online) how our run ended while friends fight on. */
+  private updateArena(): void {
+    const arena = this.arena;
+    const world = this.world;
+    if (!arena || !world || world.outcome) return;
+    const ui = viewerUi();
+    const me = this.online?.you ?? 0;
+    if (this.online) this.reportArenaRuns(this.online, arena);
+
+    const standing = arena.standing(me);
+    if (this.online && standing !== 'fighting') {
+      if (this.arenaWatching) return ui.showArenaPanel('watching', null);
+      const back = () => {
+        this.config.online!.campaign.leaveBattle();
+        this.finishOnline();
+      };
+      return ui.showArenaPanel(standing, {
+        title: standing === 'banked' ? 'You left the arena' : 'Your squad fell',
+        text: `${this.arenaEnding(me)} Your friends fight on.`,
+        buttons: [
+          { label: 'Back to the barracks', primary: true, act: back },
+          { label: '👁 Watch', act: () => (this.arenaWatching = true) },
+        ],
+      });
+    }
+    if (arena.phase !== 'checkpoint') return ui.showArenaPanel('', null);
+
+    const round = arena.round;
+    if (arena.choices.has(me) || this.arenaChoiceSent === round) {
+      return ui.showArenaPanel(`wait${round}`, {
+        title: `Round ${round} won!`,
+        text: arena.choices.get(me) === true ? 'You leave with your rewards…' : 'Waiting for your friends to choose…',
+        buttons: [],
+      });
+    }
+    const choose = (leave: boolean) => {
+      if (this.online) {
+        this.arenaChoiceSent = round;
+        this.config.online!.campaign.arenaChoice(leave);
+      } else {
+        arena.choose(world, me, leave);
+        if (world.outcome) this.localOutcome(world.outcome); // left with the rewards
+      }
+    };
+    ui.showArenaPanel(`choose${round}`, {
+      title: `Round ${round} won!`,
+      text:
+        `Leave now with ${formatNumber(this.arenaGold(arena, world, me))} gold and the experience your squad has earned. ` +
+        `Or fight on: the rounds get harder, and if your squad falls before round ${round + CHECKPOINT}, this run earns nothing.`,
+      buttons: [
+        { label: '🏆 Leave with the rewards', act: () => choose(true) },
+        { label: '⚔ Fight on', primary: true, act: () => choose(false) },
+      ],
+    });
+  }
+
+  /**
+   * Online arena: a player whose run is over (they left with their rewards, or their squad
+   * fell) is told about it by every device, so the server can settle it at once.
+   */
+  private reportArenaRuns(battle: OnlineBattle, arena: ArenaRules): void {
+    const world = battle.world;
+    world.players.forEach((_, player) => {
+      if (this.arenaReported.has(player) || arena.standing(player) === 'fighting') return;
+      const summary = arena.summary(world, player);
+      if (!summary) return;
+      this.arenaReported.add(player);
+      this.config.online!.campaign.arenaDone(battle.id, player, this.par, summary);
+      if (player === battle.you) {
+        const view = this.config.online!.campaign.view;
+        const copy: Campaign = { ...view, team: view.team.map((g) => g.clone()), completed: [...view.completed], hired: { ...view.hired } };
+        this.localReport = applyBattleSummary(copy, summary, copy.team, this.par);
+      }
+    });
   }
 
   // --- Online battles ------------------------------------------------------------------
@@ -324,6 +452,7 @@ export class MapScene extends Phaser.Scene {
     const outcome: Outcome | null = world.outcome;
     if (outcome) this.onlineOutcome(battle, outcome);
     else if (this.endedBecause !== null && !battle.backlog) this.leaveOnline(this.endedBecause);
+    else this.updateArena();
   }
 
   /** Everyone's device reaches the same end; each sends the results, the server keeps the first. */
@@ -338,7 +467,7 @@ export class MapScene extends Phaser.Scene {
     const view = campaign.view;
     const copy: Campaign = { ...view, team: view.team.map((g) => g.clone()), completed: [...view.completed], hired: { ...view.hired }, scenario: battle.lockstep.setup.scenario };
     this.localReport = mine ? applyBattleSummary(copy, mine, copy.team, this.par) : null;
-    viewerUi().showOutcome(outcome);
+    viewerUi().showOutcome(outcome, this.arenaEnding(battle.you));
   }
 
   private finishOnline(): void {
@@ -409,7 +538,8 @@ export class MapScene extends Phaser.Scene {
     for (const ob of world.oblist) {
       if (!ob.dead && ob.order === Order.LIVING) counts.set(ob.teamNum, (counts.get(ob.teamNum) ?? 0) + 1);
     }
-    viewerUi().setTeams(counts, world.levelDone === 1);
+    viewerUi().setArenaStatus(this.arena ? this.arenaStatus(this.arena, world) : null);
+    viewerUi().setTeams(counts, !this.arena && world.levelDone === 1);
     const control = this.me()?.control ?? null;
     const cam = this.cameras.main.worldView;
     this.radar?.draw(world, control, { x: cam.x, y: cam.y, width: cam.width, height: cam.height });

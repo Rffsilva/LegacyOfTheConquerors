@@ -217,6 +217,11 @@ select:focus-visible {
   border-radius: 999px;
 }
 
+.chip.arena {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .card {
   width: 180px;
   padding: 8px 10px;
