@@ -83,7 +83,8 @@ export const DEFAULT_SETTINGS: Settings = {
   keys: DEFAULT_KEYS,
 };
 
-const KEY = 'lotc.settings.v1';
+/** Its own key: the classic game at the site root shares this browser storage. */
+const KEY = 'lotc-online.settings.v1';
 
 /** Milliseconds per game tick for a speed setting (screen::timer_wait in 13.6 ms units). */
 export function tickMs(gameSpeed: number): number {

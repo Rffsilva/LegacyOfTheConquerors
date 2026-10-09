@@ -46,6 +46,8 @@ export interface Campaign {
   scenario: number;
   /** Scenario numbers already won. */
   completed: number[];
+  /** Online campaigns: fields teammates have opened up, which can be fought too. */
+  open?: number[];
   /** Hires per family, for default names like SOLDIER3. */
   hired: Record<number, number>;
   difficulty: number;
@@ -119,6 +121,25 @@ export function dismiss(campaign: Campaign, index: number): void {
   campaign.team.splice(index, 1);
 }
 
+/** The changes the barracks makes to a team. */
+export interface TeamOps {
+  hire(guy: Guy): ActionResult;
+  train(index: number, proposed: Guy): ActionResult;
+  dismiss(index: number): ActionResult;
+  setLeader(index: number): ActionResult;
+}
+
+/** Team changes for a campaign kept on this device: apply them, then `saved()`. */
+export function localTeamOps(campaign: Campaign, saved: () => void): TeamOps {
+  const then = <T>(result: T): T => (saved(), result);
+  return {
+    hire: (guy) => then(hire(campaign, guy)),
+    train: (index, proposed) => then(train(campaign, index, proposed)),
+    dismiss: (index) => then((dismiss(campaign, index), { ok: true })),
+    setLeader: (index) => then((setLeader(campaign, index), { ok: true })),
+  };
+}
+
 /** Who the player controls when a battle starts: the chosen leader, or else the first in the team. */
 export function leaderIndex(campaign: Campaign): number {
   return Math.max(0, campaign.team.findIndex((g) => g.leader));
@@ -159,13 +180,57 @@ export function squadFor(campaign: Campaign): Guy[] {
   return squad;
 }
 
+/** The counters a squad member's record gains in battle. */
+export const RECORD_FIELDS = ['exp', 'kills', 'levelKills', 'totalDamage', 'totalHits', 'totalShots'] as const;
+export type RecordField = (typeof RECORD_FIELDS)[number];
+
+/** A squad member still standing after a battle: who they are and their record afterwards. */
+export type Survivor = { from: number } & Record<RecordField, number>;
+
+/** What a battle did to the squad: small enough to send to an online campaign's server. */
+export interface BattleSummary {
+  outcome: Outcome;
+  /** The player's score and how long the battle took, for the cash and time bonus. */
+  score: number;
+  ticks: number;
+  /**
+   * Who is still standing: `from` is their index in the squad. A slime that split comes back
+   * twice from the same member, as in the original, where each half joined the team.
+   */
+  survivors: Survivor[];
+}
+
+export function summarizeBattle(world: World, squad: readonly Guy[]): BattleSummary {
+  const outcome = world.outcome ?? { result: 'defeat', reason: 'Battle abandoned.' };
+  // Survivors are the squad's records still standing (plus split-off slimes with a copied record).
+  const standing = new Set(world.oblist.filter((o) => !o.dead && o.order === Order.LIVING && o.myguy && o.teamNum === 0).map((o) => o.myguy!));
+  const survivors: Survivor[] = [];
+  for (const guy of standing) {
+    let from = squad.indexOf(guy);
+    if (from < 0) from = squad.findIndex((g) => g.family === guy.family && g.name === guy.name);
+    if (from < 0) continue;
+    const survivor = { from } as Survivor;
+    for (const field of RECORD_FIELDS) survivor[field] = guy[field];
+    survivors.push(survivor);
+  }
+  return { outcome, score: world.score[0], ticks: world.ticks, survivors };
+}
+
 /**
  * Applies a finished battle to the campaign (screen::endgame + save_game). Victory banks the
  * score, pays out cash and a time bonus, levels up survivors and loses the fallen. Defeat
  * leaves everything as it was before the battle; a retreat only moves the campaign.
  */
 export function applyBattle(campaign: Campaign, world: World, squad: readonly Guy[], par: number): BattleReport {
-  const outcome = world.outcome ?? { result: 'defeat', reason: 'Battle abandoned.' };
+  return applyBattleSummary(campaign, summarizeBattle(world, squad), squad, par);
+}
+
+/**
+ * Like applyBattle, from a summary. `squad` is the team as it went into battle (what the
+ * survivors' indices refer to); the new team keeps its order.
+ */
+export function applyBattleSummary(campaign: Campaign, summary: BattleSummary, squad: readonly Guy[], par: number): BattleReport {
+  const outcome = summary.outcome;
   const alreadyWon = campaign.completed.includes(campaign.scenario);
   const report: BattleReport = { outcome, alreadyWon, score: 0, cash: 0, timeBonus: 0, fallen: [], levelUps: [], nextScenario: campaign.scenario };
 
@@ -175,19 +240,25 @@ export function applyBattle(campaign: Campaign, world: World, squad: readonly Gu
   }
   if (outcome.result !== 'victory') return report;
 
-  const score = world.score[0];
-  let bonus = Math.trunc((score * (TIME_BONUS + par * LEVEL_BONUS - world.ticks)) / (TIME_BONUS + Math.trunc((par * LEVEL_BONUS) / 2)));
-  if (bonus < 0 || world.ticks > TIME_BONUS || alreadyWon) bonus = 0;
+  const { score, ticks } = summary;
+  let bonus = Math.trunc((score * (TIME_BONUS + par * LEVEL_BONUS - ticks)) / (TIME_BONUS + Math.trunc((par * LEVEL_BONUS) / 2)));
+  if (bonus < 0 || ticks > TIME_BONUS || alreadyWon) bonus = 0;
   report.score = score;
   report.cash = score * 2 + bonus;
   report.timeBonus = bonus;
   campaign.score += score;
   campaign.money += report.cash;
 
-  // Survivors are the squad copies still standing (plus any split-off slimes that kept a record).
-  const survivors = world.oblist.filter((o) => !o.dead && o.order === Order.LIVING && o.myguy && o.teamNum === 0).map((o) => o.myguy!);
-  const alive = new Set(survivors);
-  report.fallen = squad.filter((g) => !alive.has(g)).map((g) => g.name);
+  const survivors: Guy[] = [];
+  for (const record of [...summary.survivors].sort((a, b) => a.from - b.from)) {
+    const before = squad[record.from];
+    if (!before) continue;
+    const guy = before.clone();
+    for (const field of RECORD_FIELDS) guy[field] = record[field];
+    survivors.push(guy);
+  }
+  const alive = new Set(summary.survivors.map((s) => s.from));
+  report.fallen = squad.filter((_, i) => !alive.has(i)).map((g) => g.name);
   for (const guy of survivors) {
     const level = calculateLevel(guy.exp);
     if (level !== guy.level) {

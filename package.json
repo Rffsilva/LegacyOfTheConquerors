@@ -4,12 +4,13 @@
   "description": "A modern browser and mobile remake of OpenGlad (Gladiator by FSGames).",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc --noEmit -p server && vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p server",
     "test": "vitest run",
     "convert-assets": "node tools/convert-assets.ts",
-    "make-icons": "node tools/make-icons.ts"
+    "make-icons": "node tools/make-icons.ts",
+    "dev:server": "wrangler dev --config server/wrangler.toml"
   },
   "repository": {
     "type": "git",
@@ -25,10 +26,12 @@
     "phaser": "^3.90.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261009.1",
     "@types/node": "^26.6.4",
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.3",
+    "wrangler": "^4.149.0"
   },
   "private": true
 }

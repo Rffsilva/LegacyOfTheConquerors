@@ -4,7 +4,8 @@
 
 const VERSION = '__VERSION__';
 const FILES = __FILES__;
-const CACHE = `lotc-${VERSION}`;
+// Not "lotc-": the classic game's worker at the site root clears caches named like that.
+const CACHE = `lotconline-${VERSION}`;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(['./', ...FILES.map((f) => `./${f}`)])));
@@ -14,7 +15,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       for (const key of await caches.keys()) {
-        if (key.startsWith('lotc-') && key !== CACHE) await caches.delete(key);
+        if (key.startsWith('lotconline-') && key !== CACHE) await caches.delete(key);
       }
       await self.clients.claim();
     })(),
