@@ -5,6 +5,10 @@
 const VERSION = '__VERSION__';
 const FILES = __FILES__;
 const CACHE = `lotc-${VERSION}`;
+/** Our own caches; the online version at ./online/ keeps its own under another name. */
+const OWN_CACHE = /^lotc-[0-9a-f]{12}$/;
+/** The online version has its own service worker; leave its pages and files alone. */
+const ONLINE = new URL('online/', self.registration.scope).pathname;
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(['./', ...FILES.map((f) => `./${f}`)])));
@@ -14,7 +18,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       for (const key of await caches.keys()) {
-        if (key.startsWith('lotc-') && key !== CACHE) await caches.delete(key);
+        if (OWN_CACHE.test(key) && key !== CACHE) await caches.delete(key);
       }
       await self.clients.claim();
     })(),
@@ -27,7 +31,8 @@ self.addEventListener('message', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith(ONLINE)) return;
 
   event.respondWith(
     (async () => {
