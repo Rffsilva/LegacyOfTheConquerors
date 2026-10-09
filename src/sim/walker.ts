@@ -199,12 +199,13 @@ export class Walker {
         this.defaultWeapon = W.BONE;
         this.aniType = Ani.SKEL_GROW;
         s.weaponCost = 0;
-        costs(10); // tunnel
+        costs(10, 30, 60); // tunnel, bone storm, raise the dead
         break;
       case L.FAERIE:
         s.setFlag(Bit.ANIMATE | Bit.FLYING, true);
         this.defaultWeapon = W.SPRINKLE;
         s.weaponCost = 2;
+        costs(20, 50, 100); // mend, sleep dust, glamour
         break;
       case L.MAGE:
         costs(15, 60, 500, 70, 100); // teleport, glow, freeze time, wave, burst
@@ -218,7 +219,7 @@ export class Walker {
         break;
       case L.FIREELEMENTAL:
         s.setFlag(Bit.ANIMATE, true);
-        costs(50);
+        costs(50, 60, 120); // starburst, immolate, meteor shower
         s.maxMagicpoints = 150;
         this.defaultWeapon = W.METEOR;
         break;
@@ -228,14 +229,14 @@ export class Walker {
         // The original meant small slimes to lose their ranged attack, but its check compared
         // the order against the family and never matched.
         s.setFlag(Bit.ANIMATE, true);
-        costs(30);
+        costs(30, 30, 45); // grow (or split), acid spray, acid pool
         s.maxMagicpoints = 50;
         this.defaultWeapon = W.BLOB;
         s.weaponCost = 0;
         break;
       case L.GHOST:
         s.setFlag(Bit.ANIMATE | Bit.FLYING | Bit.ETHEREAL | Bit.NO_RANGED, true);
-        costs(30); // scare
+        costs(30, 40, 90); // scare, life drain, banshee wail
         this.defaultWeapon = W.KNIFE;
         s.weaponCost = 0;
         break;
@@ -245,7 +246,7 @@ export class Walker {
         costs(15, 80, 150, 200); // tree, faerie, reveal, shield
         break;
       case L.ORC:
-        costs(25, 20); // howl, eat corpse
+        costs(25, 20, 80); // howl, eat corpse, bloodlust
         s.weaponCost = 2;
         this.defaultWeapon = W.ROCK;
         s.setFlag(Bit.NO_RANGED, true);
@@ -257,7 +258,7 @@ export class Walker {
       case L.BARBARIAN:
         s.weaponCost = 2;
         this.defaultWeapon = W.HAMMER;
-        costs(20, 30); // hurl boulder, exploding boulder
+        costs(20, 30, 60); // hurl boulder, exploding boulder, berserk
         break;
       case L.GOLEM:
       case L.GIANT_SKELETON:

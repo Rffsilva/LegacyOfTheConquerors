@@ -122,3 +122,104 @@ describe('special abilities', () => {
     expect(['charge', 'teleport', 'heal', 'explode'].some((s) => sounds.has(s))).toBe(true);
   });
 });
+
+describe('new skills (not in the original)', () => {
+  /** Ticks until the explosions the special set off have gone off. */
+  const settle = (world: World, ticks = 20) => {
+    for (let i = 0; i < ticks; i++) world.tick();
+  };
+  const families = [L.BARBARIAN, L.ORC, L.SKELETON, L.FIREELEMENTAL, L.GHOST, L.FAERIE, L.SMALL_SLIME, L.MEDIUM_SLIME, L.SLIME];
+
+  it.each(families)('family %i has three skills, unlocked at levels 1, 4 and 7', (family) => {
+    const names = SPECIAL_NAMES[family];
+    expect(names.slice(1, 4).every((n) => n && n !== 'NONE')).toBe(true);
+  });
+
+  it('barbarian berserk: twice as fast for a while, and a quarter of the wounds back', () => {
+    const { hero } = setup(L.BARBARIAN, 7);
+    hero.stats.hitpoints = 10;
+    expect(useSpecial(hero, 3)).toBe(60);
+    expect(hero.bonusRounds).toBe(20 + 3 * 7);
+    expect(hero.stats.hitpoints).toBe(10 + Math.floor(hero.stats.maxHitpoints / 4));
+    expect(useSpecial(hero, 3)).toBe(0); // no stacking while it lasts
+  });
+
+  it('orc bloodlust speeds up nearby allies too', () => {
+    const world = new World({ map: scen1.map, objects: scen1.objects, spriteInfo, seed: 3, players: 0, squad: [new Guy(L.ORC), new Guy(L.SOLDIER)] });
+    const [orc, soldier] = [L.ORC, L.SOLDIER].map((f) => world.oblist.find((o) => o.myguy?.family === f)!);
+    soldier.setxy(orc.xpos + 20, orc.ypos);
+    orc.stats.level = 7;
+    orc.stats.magicpoints = 500;
+    expect(useSpecial(orc, 3)).toBe(80);
+    expect(orc.bonusRounds).toBeGreaterThan(0);
+    expect(soldier.bonusRounds).toBe(orc.bonusRounds);
+  });
+
+  it('skeleton bone storm and raise the dead', () => {
+    const { world, hero, enemy } = setup(L.SKELETON, 7);
+    expect(useSpecial(hero, 2)).toBe(30);
+    expect(count(world, Order.WEAPON, WeaponFamily.BONE)).toBeGreaterThanOrEqual(7);
+    // No bodies nearby: nothing to raise, and no charge.
+    expect(useSpecial(hero, 3)).toBe(0);
+    enemy.stats.hitpoints = 0;
+    enemy.dead = true;
+    enemy.death();
+    const stain = world.addFxOb(Order.TREASURE, 0);
+    stain.setxy(hero.xpos + 40, hero.ypos);
+    const before = count(world, Order.LIVING, L.SKELETON);
+    expect(useSpecial(hero, 3)).toBe(60);
+    expect(count(world, Order.LIVING, L.SKELETON)).toBeGreaterThan(before);
+  });
+
+  it('fire elemental immolate and meteor shower hurt nearby enemies', () => {
+    for (const slot of [2, 3]) {
+      const { world, hero, enemy } = setup(L.FIREELEMENTAL, 7);
+      const hp = enemy.stats.hitpoints;
+      expect(useSpecial(hero, slot)).toBe(slot === 2 ? 60 : 120);
+      settle(world);
+      expect(enemy.dead || enemy.stats.hitpoints < hp).toBe(true);
+    }
+  });
+
+  it('ghost life drain heals the ghost; banshee wail stuns', () => {
+    const { world, hero, enemy } = setup(L.GHOST, 7);
+    hero.stats.hitpoints = 5;
+    expect(useSpecial(hero, 2)).toBe(40);
+    expect(hero.stats.hitpoints).toBe(5 + 10 + 6 * 7);
+    settle(world);
+    const wail = setup(L.GHOST, 7);
+    expect(useSpecial(wail.hero, 3)).toBe(90);
+    expect(wail.enemy.stats.frozenDelay).toBeGreaterThan(0);
+    expect(enemy.dead || enemy.stats.hitpoints < enemy.stats.maxHitpoints).toBe(true);
+  });
+
+  it('faerie mend, sleep dust and glamour', () => {
+    const world = new World({ map: scen1.map, objects: scen1.objects, spriteInfo, seed: 3, players: 0, squad: [new Guy(L.FAERIE), new Guy(L.SOLDIER)] });
+    const [faerie, soldier] = [L.FAERIE, L.SOLDIER].map((f) => world.oblist.find((o) => o.myguy?.family === f)!);
+    soldier.setxy(faerie.xpos + 20, faerie.ypos);
+    faerie.stats.level = 7;
+    faerie.stats.magicpoints = 500;
+    // Nobody hurt: mend costs nothing.
+    expect(useSpecial(faerie, 1)).toBe(0);
+    soldier.stats.hitpoints = 1;
+    expect(useSpecial(faerie, 1)).toBe(20);
+    expect(soldier.stats.hitpoints).toBe(1 + 10 + 8 * 7);
+    expect(useSpecial(faerie, 3)).toBe(100);
+    expect(soldier.invisibilityLeft).toBeGreaterThan(0);
+    expect(faerie.invisibilityLeft).toBeGreaterThan(0);
+
+    const { hero, enemy } = setup(L.FAERIE, 7);
+    expect(useSpecial(hero, 2)).toBe(50);
+    expect(enemy.stats.frozenDelay).toBeGreaterThan(0);
+  });
+
+  it('slimes spray acid and leave acid pools, but only with enemies around', () => {
+    const { world, hero, enemy } = setup(L.MEDIUM_SLIME, 7);
+    expect(useSpecial(hero, 2)).toBe(30);
+    expect(count(world, Order.WEAPON, WeaponFamily.BLOB)).toBeGreaterThanOrEqual(7);
+    expect(useSpecial(hero, 3)).toBe(45);
+    expect(count(world, Order.FX, FxFamily.CLOUD)).toBe(1);
+    enemy.setxy(hero.xpos + 400, hero.ypos + 400);
+    expect(useSpecial(hero, 2)).toBe(0);
+  });
+});
