@@ -5,6 +5,7 @@
 import {
   dismiss,
   hire,
+  rename,
   setLeader,
   train,
   type ActionResult,
@@ -97,6 +98,7 @@ export class OnlineCampaign {
     train: (index, proposed) => this.change(() => train(this.view, index, proposed), () => ({ t: 'train', index, guy: toData(proposed) })),
     dismiss: (index) => this.change(() => (dismiss(this.view, index), { ok: true }), () => ({ t: 'dismiss', index })),
     setLeader: (index) => this.change(() => (setLeader(this.view, index), { ok: true }), () => ({ t: 'leader', index })),
+    rename: (index, name) => this.change(() => rename(this.view, index, name), () => ({ t: 'rename', index, name })),
   };
 
   setWhere(where: Whereabouts): void {

@@ -289,6 +289,12 @@ export class Screens {
         }
         render();
       }) : this.trainPanel(campaign, selected, proposal, (next) => {
+        if (next.rename !== undefined) {
+          const result = actions.team.rename(selected, next.rename);
+          const renamed = campaign.team[selected];
+          message = result.ok && renamed ? `Renamed to ${titleCase(renamed.name)}.` : result.ok ? '' : result.reason;
+          if (proposal && renamed) proposal.name = renamed.name;
+        }
         if (next.train && proposal) {
           const result = actions.team.train(selected, proposal);
           message = result.ok ? `${titleCase(proposal.name)} trained.` : result.reason;
@@ -397,7 +403,7 @@ export class Screens {
     );
   }
 
-  private trainPanel(campaign: Campaign, index: number, proposal: Guy | null, update: (a: { train?: boolean; dismiss?: boolean }) => void): HTMLElement {
+  private trainPanel(campaign: Campaign, index: number, proposal: Guy | null, update: (a: { train?: boolean; dismiss?: boolean; rename?: string }) => void): HTMLElement {
     const current = campaign.team[index];
     if (!current || !proposal) return h('section', { className: 'panel' }, h('p', {}, 'Select a team member to train.'));
     const cost = trainingCost(current, proposal);
@@ -409,6 +415,18 @@ export class Screens {
       h('p', { className: 'blurb' },
         `Experience ${formatNumber(current.exp)} · ${current.kills} kills`,
         nextSpecialLevel ? ` · next special at level ${nextSpecialLevel}` : '',
+      ),
+      // Renaming is free and immediate (on Enter, or on leaving the field).
+      h('label', { className: 'name' }, h('span', {}, 'Name'),
+        h('input', {
+          value: titleCase(current.name),
+          maxLength: 11,
+          ariaLabel: `Rename ${titleCase(current.name)}`,
+          onchange: (e: Event) => {
+            const value = (e.target as HTMLInputElement).value.trim();
+            if (value.toUpperCase() !== current.name) update({ rename: value });
+          },
+        }),
       ),
       this.statRows(proposal, (stat) => current[stat], () => update({})),
       h('p', { className: 'derived' }, `HP ${v.hp} · Magic ${v.mp}`),

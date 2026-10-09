@@ -11,7 +11,7 @@ import { keepAwake } from '../game/wakeLock.ts';
 import { CameraControls } from '../input/cameraControls.ts';
 import { PlayerControls } from '../input/playerControls.ts';
 import { TILE_MARGIN, TILE_SPACING } from '../render/textures.ts';
-import { WorldRenderer } from '../render/worldRenderer.ts';
+import { WorldRenderer, type Marks } from '../render/worldRenderer.ts';
 import { OnlineBattle, type BattleMessage } from '../online/onlineBattle.ts';
 import type { OnlineCampaign } from '../online/onlineCampaign.ts';
 import type { Guy } from '../sim/guy.ts';
@@ -241,11 +241,22 @@ export class MapScene extends Phaser.Scene {
       this.hudTimer = 0;
       this.updateHud();
     }
-    view.draw(this.running ? Math.min(1, this.accumulator / tick) : 1, settings.value.healthBars, this.me()?.control?.teamNum ?? 0);
+    view.draw(this.running ? Math.min(1, this.accumulator / tick) : 1, settings.value.healthBars, this.me()?.control?.teamNum ?? 0, this.marks());
 
     const control = this.followed();
     const image = control ? view.imageFor(control) : undefined;
     if (image) this.controls?.follow(image.x + image.width / 2, image.y + image.height / 2);
+  }
+
+  /** Our unit, and (online) the units our friends control right now. */
+  private marks(): Marks {
+    const world = this.world;
+    const self = this.me()?.control ?? null;
+    const you = this.online?.you ?? 0;
+    const friends = this.online && world
+      ? world.players.flatMap((p, player) => (player !== you && p.active && p.control && !p.control.dead ? [{ unit: p.control, player }] : []))
+      : [];
+    return { self: self && !self.dead ? self : null, friends };
   }
 
   /** This device's player. */
