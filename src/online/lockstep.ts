@@ -3,6 +3,7 @@
 // tick, which inputs changed and who joined or left; replaying that gives the identical world
 // on every device (the simulation is deterministic), including for someone who joins late.
 
+import { ArenaRules, isArena } from '../game/arena.ts';
 import type { Guy } from '../sim/guy.ts';
 import { NO_INPUT, type PlayerInput } from '../sim/player.ts';
 import { World, type WorldOptions } from '../sim/world.ts';
@@ -29,7 +30,9 @@ export type BattleEvent =
   | { t: 'join'; player: number; name: string; squad: GuyData[] }
   /** Away (left, or lost connection): their squad fights on under the computer. */
   | { t: 'leave'; player: number }
-  | { t: 'return'; player: number };
+  | { t: 'return'; player: number }
+  /** The arena, at a checkpoint: a player leaves with their rewards, or fights on. */
+  | { t: 'choice'; player: number; leave: boolean };
 
 /** What happens at tick `n`: inputs that changed ([player, code]) and player events. */
 export interface Frame {
@@ -107,6 +110,8 @@ export class Lockstep {
       completed: setup.completed,
       alreadyWon: setup.alreadyWon,
       squads: this.squads,
+      // Players get 30 seconds to choose at an arena checkpoint.
+      rules: isArena(setup.scenario) ? new ArenaRules({ decideTicks: Math.round(30_000 / setup.tickMs) }) : undefined,
     });
     this.codes = this.squads.map(() => 0);
   }
@@ -119,6 +124,8 @@ export class Lockstep {
         const squad = event.squad.map(toGuy);
         this.squads[event.player] = squad;
         this.world.addSquad(event.player, squad);
+      } else if (event.t === 'choice') {
+        if (this.world.rules instanceof ArenaRules) this.world.rules.choose(this.world, event.player, event.leave === true);
       } else {
         this.world.setPlayerActive(event.player, event.t === 'return');
       }

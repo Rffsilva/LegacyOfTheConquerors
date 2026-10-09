@@ -26,7 +26,8 @@ import {
 import type { BattleMessage } from '../online/onlineBattle.ts';
 import { OnlineCampaign } from '../online/onlineCampaign.ts';
 import { lobbyBar, presenceBar, showCampaignList, showConnecting, showSignIn } from '../ui/onlineScreens.ts';
-import { applyBattle, localTeamOps, newCampaign, squadFor, type Campaign } from './campaign.ts';
+import { ARENA_ID, ArenaRules, fieldId, isArena } from './arena.ts';
+import { applyBattle, applyBattleSummary, localTeamOps, newCampaign, squadFor, type Campaign } from './campaign.ts';
 import { canInstall, initPwa, install, needsManualInstall, onInstallChange } from './pwa.ts';
 import { services } from './services.ts';
 import { loadCampaign, saveCampaign } from './storage.ts';
@@ -108,6 +109,7 @@ export class App {
 
   private fight(scenario: number): void {
     const campaign = this.campaign!;
+    if (isArena(scenario)) return this.fightArena();
     if (!this.exists(`scen${scenario}`)) {
       this.barracks(`Field ${scenario} doesn't exist. Pick another.`);
       return;
@@ -123,6 +125,26 @@ export class App {
       alreadyWon: campaign.completed.includes(scenario),
       difficulty: campaign.difficulty,
       onFinish: (world, par) => this.finishBattle(world, squad, par),
+    });
+  }
+
+  /** Into the arena: the campaign's own fields are left as they are. */
+  private fightArena(): void {
+    const campaign = this.campaign!;
+    const squad = squadFor(campaign);
+    this.startBattle({
+      id: ARENA_ID,
+      mode: 'campaign',
+      squad,
+      difficulty: campaign.difficulty,
+      onFinish: (world, par) => {
+        const summary = world.rules instanceof ArenaRules ? world.rules.summary(world, 0) : null;
+        if (!summary) return this.barracks();
+        const report = applyBattleSummary(campaign, summary, squad, par);
+        this.save();
+        this.leaveBattle();
+        this.screens.showReport(report, () => this.barracks());
+      },
     });
   }
 
@@ -261,8 +283,8 @@ export class App {
   }
 
   private onlineBattle(campaign: OnlineCampaign, message: BattleMessage): void {
-    const id = `scen${message.setup.scenario}`;
-    if (!this.exists(id)) return this.onlineBarracks(campaign, `This game doesn't have field ${message.setup.scenario}. Is it up to date?`);
+    const id = fieldId(message.setup.scenario);
+    if (!isArena(id) && !this.exists(id)) return this.onlineBarracks(campaign, `This game doesn't have field ${message.setup.scenario}. Is it up to date?`);
     // Mid-battle, only show what the server has to say; the barracks catches up afterwards.
     campaign.onChange = (change) => {
       if (change.notice) viewerUi().toast(change.notice);

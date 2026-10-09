@@ -160,6 +160,16 @@ export class OnlineCampaign {
     this.send({ t: 'battle-leave' });
   }
 
+  /** The arena, at a checkpoint: leave with our rewards, or fight on. */
+  arenaChoice(leave: boolean): void {
+    this.send({ t: 'arena-choice', leave });
+  }
+
+  /** The arena: a player's run is over; the server settles it (the first device to say so wins). */
+  arenaDone(id: string, player: number, par: number, summary: BattleSummary): void {
+    this.send({ t: 'arena-done', id, player, par, summary });
+  }
+
   sendInput(code: number): void {
     this.send({ t: 'input', code });
   }

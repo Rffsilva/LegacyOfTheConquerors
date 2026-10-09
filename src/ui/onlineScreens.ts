@@ -1,6 +1,7 @@
 // Screens for online campaigns: signing in with the access password, the list of your online
 // campaigns, and the bar in an online barracks showing who's playing and the invite link.
 
+import { ARENA_FIELD, isArena } from '../game/arena.ts';
 import { inviteLink, readInvite, type KnownCampaign } from '../online/client.ts';
 import type { OnlineCampaign } from '../online/onlineCampaign.ts';
 import { formatNumber, h } from './dom.ts';
@@ -228,7 +229,7 @@ export function presenceBar(campaign: OnlineCampaign): { element: HTMLElement; u
       ...(campaign.info?.members ?? []).map((m) =>
         h('li', { className: m.online ? 'on' : '' },
           h('strong', {}, m.you ? `${m.name} (you)` : m.name),
-          ` · ${m.online ? (m.where?.at === 'battle' ? `fighting on #${m.where.scenario}` : m.ready ? '✓ ready' : 'in the barracks') : m.inBattle ? 'away (squad still fighting)' : 'away'}`,
+          ` · ${m.online ? (m.where?.at === 'battle' ? (isArena(m.where.scenario) ? 'in the arena' : `fighting on #${m.where.scenario}`) : m.ready ? '✓ ready' : 'in the barracks') : m.inBattle ? 'away (squad still fighting)' : 'away'}`,
           ` · ${m.teamSize} ${m.teamSize === 1 ? 'man' : 'men'}${m.topLevel ? `, best Lv ${m.topLevel}` : ''}`,
         ),
       ),
@@ -335,7 +336,7 @@ export function lobbyBar(campaign: OnlineCampaign, fieldTitle: (n: number) => st
     const info = campaign.info;
     const me = campaign.me;
     if (!info) return;
-    const open = info.open ?? [1];
+    const open = [...(info.open ?? [1]), ARENA_FIELD];
     const field = info.field ?? Math.max(...open);
     picker.replaceChildren(...open.map((n) => new Option(`${fieldTitle(n)}${campaign.view.completed.includes(n) ? ' (won)' : ''}`, String(n), false, n === field)));
     picker.disabled = !!info.battle || campaign.status !== 'online';
@@ -344,7 +345,7 @@ export function lobbyBar(campaign: OnlineCampaign, fieldTitle: (n: number) => st
 
     const here = info.members.filter((m) => m.online && m.where?.at === 'barracks');
     if (info.battle) {
-      button.textContent = me?.inBattle ? '⚔ Back to the battle' : `⚔ Join the battle on #${info.battle.scenario}`;
+      button.textContent = me?.inBattle ? '⚔ Back to the battle' : isArena(info.battle.scenario) ? '⚔ Join the arena' : `⚔ Join the battle on #${info.battle.scenario}`;
       status.textContent = `${info.battle.playing.join(', ') || 'Nobody'} ${info.battle.playing.length === 1 ? 'is' : 'are'} fighting on ${fieldTitle(info.battle.scenario)}.`;
     } else {
       button.textContent = me?.ready ? '✓ Ready (tap to cancel)' : '✋ Ready';

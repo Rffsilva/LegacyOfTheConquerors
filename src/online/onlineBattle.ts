@@ -1,6 +1,7 @@
 // The game's side of an online battle: plays the ticks the server sends (catching up first, if
 // we joined late or dropped out for a while), and sends our own inputs when they change.
 
+import { ArenaRules } from '../game/arena.ts';
 import { summarizeBattle, type BattleSummary } from '../game/campaign.ts';
 import type { PlayerInput } from '../sim/player.ts';
 import type { World } from '../sim/world.ts';
@@ -92,6 +93,8 @@ export class OnlineBattle {
 
   /** Every player's results, by player number (everyone's device works out the same). */
   summaries(): (BattleSummary | null)[] {
-    return this.lockstep.squads.map((squad, player) => (squad ? summarizeBattle(this.world, squad, player) : null));
+    const world = this.world;
+    const arena = world.rules instanceof ArenaRules ? world.rules : null;
+    return this.lockstep.squads.map((squad, player) => (!squad ? null : arena ? arena.summary(world, player) : summarizeBattle(world, squad, player)));
   }
 }

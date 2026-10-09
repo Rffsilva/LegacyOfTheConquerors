@@ -32,6 +32,14 @@ export interface UnitCard {
   special: string;
 }
 
+/** What the arena panel shows at a checkpoint, and after a player's run is over. */
+export interface ArenaPanel {
+  title: string;
+  text: string;
+  /** Buttons: label and what it does. */
+  buttons: { label: string; primary?: boolean; act: () => void }[];
+}
+
 const TOAST_MS = 3500;
 const MAX_TOASTS = 4;
 
@@ -56,6 +64,9 @@ class ViewerUi {
   private scenarios: ScenarioSummary[] = [];
   private actions?: ViewerActions;
   private lastCard = '';
+  /** The arena's round and foes, shown with the team counts. */
+  private arenaStatus: string | null = null;
+  private arenaPanelKey = '';
   private mode: BattleMode = 'skirmish';
   private running = false;
   /** Whether the battle had started when the menu was opened. */
@@ -275,11 +286,14 @@ class ViewerUi {
     this.root.querySelector('.quit')!.textContent = mode === 'campaign' ? '🏳 Abandon battle' : mode === 'online' ? '🚪 Leave the battle' : '☰ Main menu';
     if (mode === 'skirmish') history.replaceState(null, '', `?scen=${scenario.id}`);
 
-    const paragraphs = reflow(scenario.text);
+    const arena = scenario.id === 'arena';
+    const paragraphs = arena ? scenario.text : reflow(scenario.text);
     this.briefing.replaceChildren(
       ...(paragraphs.length ? paragraphs : ['No briefing for this field.']).map((text) => h('p', {}, text)),
       h('p', { className: 'hint' },
-        mode === 'online'
+        arena
+          ? 'You control one of your squad; the others fight on their own. Foes come in through the gates in each wall. Between rounds your squad gets back some of its strength, and all of it at each checkpoint.'
+          : mode === 'online'
           ? 'You control one of your squad; the others, and your friends\' squads, fight alongside. Defeat every enemy, then walk onto the exit. Online battles don\'t pause: if you leave, your squad fights on and you can rejoin from the barracks.'
           : 'You control one squad member; the others fight on their own. Defeat every enemy, then walk onto the exit. Moving or attacking starts the battle; Esc or ☰ pauses.',
       ),
@@ -288,6 +302,35 @@ class ViewerUi {
     this.outcome.hidden = true;
     this.toasts.replaceChildren();
     this.lastCard = '';
+    this.arenaStatus = null;
+    this.arenaPanelKey = '';
+  }
+
+  /** The arena's progress next to the team counts (null outside the arena). */
+  setArenaStatus(text: string | null): void {
+    this.arenaStatus = text;
+  }
+
+  /**
+   * The arena's panel: the choice at a checkpoint, or how a player's run ended while friends
+   * fight on. `key` identifies what's shown, so it isn't rebuilt (losing focus) on every refresh.
+   */
+  showArenaPanel(key: string, panel: ArenaPanel | null): void {
+    if (key === this.arenaPanelKey) return;
+    this.arenaPanelKey = key;
+    if (!panel) {
+      this.outcome.hidden = true;
+      return;
+    }
+    this.closeMenuQuietly();
+    this.outcome.replaceChildren(
+      h('h2', {}, panel.title),
+      h('p', {}, panel.text),
+      h('div', { className: 'actions' },
+        ...panel.buttons.map((b) => h('button', { className: `pill${b.primary ? ' primary' : ''}`, onclick: b.act }, b.label)),
+      ),
+    );
+    this.outcome.hidden = false;
   }
 
   /** Live unit counts per team. */
@@ -299,6 +342,7 @@ class ViewerUi {
         return chip;
       }),
       ...(exitOpen ? [h('span', { className: 'chip exit' }, 'Field clear · find the exit')] : []),
+      ...(this.arenaStatus ? [h('span', { className: 'chip arena' }, this.arenaStatus)] : []),
     );
   }
 
@@ -337,10 +381,11 @@ class ViewerUi {
     setTimeout(() => el.remove(), TOAST_MS);
   }
 
-  showOutcome(outcome: Outcome): void {
+  showOutcome(outcome: Outcome, message?: string): void {
     this.closeMenuQuietly();
+    this.arenaPanelKey = 'outcome';
     const won = outcome.result === 'victory';
-    const reason = outcome.result === 'defeat' ? outcome.reason : outcome.result === 'retreat' ? 'You withdrew from the field.' : 'The field is yours.';
+    const reason = message ?? (outcome.result === 'defeat' ? outcome.reason : outcome.result === 'retreat' ? 'You withdrew from the field.' : 'The field is yours.');
     const button = (text: string, act: string) => h('button', { className: 'pill', dataset: { act } }, text);
     const actions = h('div', { className: 'actions' });
     if (this.mode !== 'skirmish') actions.append(button('Continue', 'finish'));
