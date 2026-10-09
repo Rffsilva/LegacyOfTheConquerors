@@ -15,7 +15,9 @@ import {
   forgetSession,
   knownCampaigns,
   loadSession,
+  logOff,
   readInvite,
+  refreshCampaigns,
   rememberCampaign,
   SERVER,
   SignedOutError,
@@ -142,12 +144,22 @@ export class App {
     history.replaceState(null, '', location.pathname);
     const show = (...content: Node[]) => this.screens.show(...content);
     const session = loadSession();
-    if (!session?.token) {
+    if (!session?.token || !session.account) {
+      // A device signed in from before accounts keeps its campaigns: choosing a username and
+      // code (no password needed again) ties them to the new account.
+      const upgrading = !!session?.token;
       showSignIn(show, {
         name: session?.name ?? '',
-        notice: notice ?? (this.invite ? 'Sign in to join your friend\'s campaign.' : undefined),
-        signIn: async (name, password) => {
-          await signIn(password, name);
+        needPassword: !upgrading,
+        notice:
+          notice ??
+          (upgrading
+            ? 'Online play now uses a username and code, so your campaigns follow you to any device. Choose them once: this device keeps its campaigns.'
+            : this.invite
+              ? 'Sign in to join your friend\'s campaign.'
+              : undefined),
+        signIn: async (username, code, password) => {
+          await signIn(username, code, password);
           this.onlineMenu();
         },
         back: () => this.menu(),
@@ -160,6 +172,13 @@ export class App {
       this.openOnline(id, invite);
       return;
     }
+    // Another device may have joined campaigns since: refresh the list from the account, and
+    // redraw it if it changed while it is still on screen.
+    const before = JSON.stringify(knownCampaigns());
+    let listPage: Node | null = null;
+    void refreshCampaigns(session).then((campaigns) => {
+      if (this.screens.current === listPage && JSON.stringify(campaigns) !== before) this.onlineMenu(notice);
+    });
     showCampaignList(show, {
       name: session.name,
       campaigns: knownCampaigns(),
@@ -181,12 +200,14 @@ export class App {
         forgetCampaign(id);
         this.onlineMenu();
       },
-      signOut: () => {
-        forgetSession();
-        this.onlineMenu();
+      logOff: () => {
+        this.closeOnline();
+        logOff();
+        this.onlineMenu('Logged off. Sign in with your username and code to get your campaigns back, here or on any device.');
       },
       back: () => this.menu(),
     });
+    listPage = this.screens.current;
   }
 
   private openOnline(id: string, invite: string | null): void {

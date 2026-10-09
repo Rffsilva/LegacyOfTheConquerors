@@ -138,6 +138,11 @@ export class Screens {
     this.root.replaceChildren();
   }
 
+  /** What the screens show right now (to tell whether a screen is still up). */
+  get current(): Node | null {
+    return this.root.hidden ? null : this.root.firstChild;
+  }
+
   show(...content: Node[]): void {
     this.root.hidden = false;
     this.root.replaceChildren(...content);

@@ -91,6 +91,12 @@ The server is a Cloudflare Worker with Durable Objects (`server/`); the rules it
 `src/online/room.ts`, shared with the game and the tests. Playing online needs the access
 password, which the server checks before handing out a sign-in token.
 
+**Accounts:** players sign in with a username and a personal code of their own. A new username
+creates an account; the same username and code on another device (case doesn't matter) loads it,
+with the list of campaigns the player is in. Codes are stored only as a salted PBKDF2 hash, and
+five wrong codes lock a username for 15 minutes. **Log off** (on the online campaigns screen)
+removes the sign-in and the campaign list from that device; they come back with the next sign-in.
+
 **Running it locally:**
 
 ```bash
@@ -101,8 +107,8 @@ VITE_ONLINE_SERVER=http://localhost:8787 npm run dev       # the game, with onli
 
 **Deploying:** the Pages workflow deploys the server too when the repository has these Actions
 secrets: `CLOUDFLARE_API_TOKEN` (the "Edit Cloudflare Workers" template), `CLOUDFLARE_ACCOUNT_ID`
-and `ONLINE_PASSWORD`. Changing `ONLINE_PASSWORD` signs everyone out; they keep their campaigns
-when they sign in with the new one. Without the secrets, the site builds without online play.
+and `ONLINE_PASSWORD`. Changing `ONLINE_PASSWORD` signs everyone out; they get their campaigns
+back when they sign in again with their username, code and the new password. Without the secrets, the site builds without online play.
 
 ## Layout
 

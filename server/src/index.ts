@@ -1,7 +1,9 @@
 // The online campaign server for Legacy of the Conquerors (a Cloudflare Worker).
 //
-//   POST /api/session                  { password, token? } -> { token, playerId }
+//   POST /api/session                  { username, code, password?, token? } -> { token, playerId, name, campaigns }
 //   GET  /api/session?token=           -> { playerId }, or 401 when the token no longer works
+//   GET  /api/me                       -> { name, campaigns }                              (signed in)
+//   POST /api/me/campaigns             { add?: { id, name }, remove?: id } -> { name, campaigns } (signed in)
 //   POST /api/campaigns                { name, difficulty, playerName } -> { id, invite }   (signed in)
 //   GET  /api/campaigns/:id/connect    WebSocket: ?token=&name=&invite=
 
@@ -27,8 +29,33 @@ export default {
 
       if (url.pathname === '/api/session' && request.method === 'POST') {
         const body = await readJson(request);
-        const result = await gate.login(body.password, request.headers.get('CF-Connecting-IP') ?? 'unknown', body.token);
-        return result.ok ? respond({ token: result.token, playerId: result.playerId }) : respond({ error: result.error }, result.status);
+        const result = await gate.login({
+          username: body.username,
+          code: body.code,
+          password: body.password,
+          token: body.token,
+          ip: request.headers.get('CF-Connecting-IP') ?? 'unknown',
+        });
+        if (!result.ok) return respond({ error: result.error }, result.status);
+        return respond({ token: result.token, playerId: result.playerId, name: result.name, campaigns: result.campaigns });
+      }
+
+      if (url.pathname === '/api/me' || url.pathname === '/api/me/campaigns') {
+        const playerId = await gate.verify(request.headers.get('Authorization')?.replace(/^Bearer /, ''));
+        if (!playerId) return respond({ error: 'Please sign in again.' }, 401);
+        if (url.pathname === '/api/me' && request.method === 'GET') {
+          const profile = await gate.profile(playerId);
+          return profile ? respond(profile) : respond({ error: 'Choose a username and code first.' }, 404);
+        }
+        if (url.pathname === '/api/me/campaigns' && request.method === 'POST') {
+          const body = await readJson(request);
+          const add = body.add as { id?: unknown; name?: unknown } | undefined;
+          const profile = await gate.changeCampaigns(playerId, {
+            add: add && typeof add.id === 'string' ? { id: add.id, name: String(add.name ?? '') } : undefined,
+            remove: typeof body.remove === 'string' ? body.remove : undefined,
+          });
+          return profile ? respond(profile) : respond({ error: 'Choose a username and code first.' }, 404);
+        }
       }
 
       if (url.pathname === '/api/session' && request.method === 'GET') {
@@ -51,6 +78,7 @@ export default {
           ownerName: String(body.playerName ?? ''),
           now: Date.now(),
         });
+        await gate.changeCampaigns(playerId, { add: { id: id.toString(), name: String(body.name ?? '') } });
         return respond({ id: id.toString(), invite });
       }
 
