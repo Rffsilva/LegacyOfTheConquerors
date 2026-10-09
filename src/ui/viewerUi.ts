@@ -205,6 +205,25 @@ class ViewerUi {
     return this.root.querySelector('.radar')!;
   }
 
+  /**
+   * Calls back now and whenever it changes with how much of the screen the HUD covers at the
+   * top and the touch controls at the bottom. Returns a function that stops watching.
+   */
+  watchInsets(callback: (insets: { top: number; bottom: number }) => void): () => void {
+    const status = this.root.querySelector<HTMLElement>('.status')!;
+    const touch = this.touchRoot;
+    const measure = () => callback({ top: status.getBoundingClientRect().bottom, bottom: touch.getBoundingClientRect().height });
+    const observer = new ResizeObserver(measure);
+    observer.observe(status);
+    observer.observe(touch);
+    window.addEventListener('resize', measure);
+    measure();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }
+
   /** The container the touch controls live in. */
   get touchRoot(): HTMLElement {
     return this.root.querySelector('.touch')!;

@@ -3,9 +3,18 @@ import Phaser from 'phaser';
 const MAX_ZOOM = 8;
 const WHEEL_ZOOM_STEP = 1.0015;
 
+/** Screen pixels covered by overlays along the top and bottom edges. */
+export interface Insets {
+  top: number;
+  bottom: number;
+}
+
 /**
  * Pan and zoom for a world of fixed size: drag to pan, pinch or mouse wheel to zoom toward the
  * pointer, and smooth following of a target. Works the same with mouse, touch and pen.
+ *
+ * The camera may scroll past the top and bottom of the map by the height of the overlays there
+ * (HUD, touch controls), so a unit at the edge of the map can still be seen clear of them.
  */
 export class CameraControls {
   private readonly scene: Phaser.Scene;
@@ -15,6 +24,7 @@ export class CameraControls {
   private pinchDistance = 0;
   /** When the user last panned by hand; following pauses for a moment after that. */
   private lastManual = -Infinity;
+  private insets: Insets = { top: 0, bottom: 0 };
 
   constructor(scene: Phaser.Scene, worldWidth: number, worldHeight: number) {
     this.scene = scene;
@@ -59,14 +69,21 @@ export class CameraControls {
     cam.setScroll(worldX - halfW - (screenX - halfW) / newZoom, worldY - halfH - (screenY - halfH) / newZoom);
   }
 
-  /** Eases the camera toward (x, y) unless the user recently panned by hand. */
+  /** Sets how much of the screen the overlays cover, in screen pixels. */
+  setInsets(insets: Insets): void {
+    this.insets = insets;
+    this.setZoom(this.cam.zoom);
+  }
+
+  /** Eases the camera toward (x, y), placed in the middle of the uncovered area, unless the user recently panned by hand. */
   follow(x: number, y: number, delta: number): void {
     if (this.scene.time.now - this.lastManual < 2500) return;
     const cam = this.cam;
     const t = 1 - Math.exp(-delta / 120);
     const cx = cam.scrollX + cam.width / 2;
     const cy = cam.scrollY + cam.height / 2;
-    cam.centerOn(cx + (x - cx) * t, cy + (y - cy) * t);
+    const ty = y - (this.insets.top - this.insets.bottom) / 2 / cam.zoom;
+    cam.centerOn(cx + (x - cx) * t, cy + (ty - cy) * t);
   }
 
   /** Jump to a spot chosen by the user (e.g. on the minimap), pausing following for a moment. */
@@ -89,14 +106,19 @@ export class CameraControls {
     this.setZoom(Phaser.Math.Clamp(this.cam.zoom, this.minZoom(), MAX_ZOOM));
   }
 
-  /** Sets the zoom and widens the camera bounds on any axis where the map is smaller than the view, so it stays centred. */
+  /**
+   * Sets the zoom and the camera bounds: the map plus room under the overlays, widened on any
+   * axis where that is smaller than the view, so it stays centred.
+   */
   private setZoom(zoom: number): void {
     const viewW = this.scene.scale.width / zoom;
     const viewH = this.scene.scale.height / zoom;
+    const top = -this.insets.top / zoom;
+    const height = this.worldHeight - top + this.insets.bottom / zoom;
     const boundsW = Math.max(this.worldWidth, viewW);
-    const boundsH = Math.max(this.worldHeight, viewH);
+    const boundsH = Math.max(height, viewH);
     this.cam.setZoom(zoom);
-    this.cam.setBounds((this.worldWidth - boundsW) / 2, (this.worldHeight - boundsH) / 2, boundsW, boundsH);
+    this.cam.setBounds((this.worldWidth - boundsW) / 2, top + (height - boundsH) / 2, boundsW, boundsH);
   }
 
   private onPointerMove(pointer: Phaser.Input.Pointer): void {
