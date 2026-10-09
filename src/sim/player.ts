@@ -93,7 +93,7 @@ export class PlayerController {
     return true;
   }
 
-  /** Picks someone to control if we have nobody: squad members first, then any ally. */
+  /** Picks someone to control if we have nobody: the squad leader, other squad members, then any ally. */
   private ensureControl(): boolean {
     const c = this.control;
     if (c && !c.dead) {
@@ -102,6 +102,7 @@ export class PlayerController {
     }
     const livings = this.world.oblist.filter((o) => !o.dead && o.order === Order.LIVING);
     const next =
+      livings.find((o) => o.user === -1 && o.myguy?.leader && o.teamNum === this.team) ??
       livings.find((o) => o.user === -1 && o.myguy && o.teamNum === this.team) ??
       livings.find((o) => o.user === -1 && o.teamNum === this.team) ??
       livings.find((o) => o.myguy);

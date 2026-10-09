@@ -670,8 +670,16 @@ canvas.sprite {
   list-style: none;
 }
 
+.team-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .member {
   display: grid;
+  flex: 1;
+  min-width: 0;
   grid-template-columns: 40px 1fr;
   grid-template-rows: auto auto;
   align-items: center;
@@ -690,6 +698,17 @@ canvas.sprite {
 .member.selected {
   border-color: var(--accent);
   background: rgb(214 170 92 / 0.15);
+}
+
+.leader {
+  flex: none;
+  font-size: 1.2rem;
+  color: var(--muted);
+}
+
+.leader[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .member-meta {

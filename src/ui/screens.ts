@@ -8,8 +8,10 @@ import {
   hire,
   hireCost,
   HIREABLE,
+  leaderIndex,
   MAX_TEAM,
   recruit,
+  setLeader,
   STATS,
   train,
   trainingCost,
@@ -202,9 +204,11 @@ export class Screens {
         h('button', { className: 'icon', ariaLabel: 'Settings', onclick: actions.settings }, '⚙'),
       );
 
+      const leader = leaderIndex(campaign);
       const teamList = h('ol', { className: 'team-list' },
         ...campaign.team.map((guy, i) => {
           const v = vitals(guy);
+          const name = titleCase(guy.name);
           return h('li', {},
             h('button', {
               className: `member${tab === 'train' && i === selected ? ' selected' : ''}`,
@@ -217,9 +221,21 @@ export class Screens {
               },
             },
               new SpritePreview(this.bank, guy.family, 0, 2).canvas,
-              h('span', { className: 'member-name' }, titleCase(guy.name)),
+              h('span', { className: 'member-name' }, name),
               h('span', { className: 'member-meta' }, `${familyName(guy.family)} · Lv ${guy.level} · HP ${v.hp} · ${guy.kills} kills`),
             ),
+            h('button', {
+              className: 'icon leader',
+              ariaLabel: `Start battles as ${name}`,
+              title: i === leader ? `${name} leads: you start battles in control of them` : `Start battles as ${name}`,
+              ariaPressed: String(i === leader),
+              onclick: () => {
+                setLeader(campaign, i);
+                actions.changed();
+                message = `${name} will lead the next battle.`;
+                render();
+              },
+            }, i === leader ? '★' : '☆'),
           );
         }),
       );
@@ -227,6 +243,7 @@ export class Screens {
       const team = h('section', { className: 'team' },
         h('h2', {}, `Your team (${campaign.team.length}/${MAX_TEAM})`),
         campaign.team.length ? teamList : h('p', { className: 'empty' }, 'Nobody yet. Hire some recruits to fight for you.'),
+        campaign.team.length > 1 && h('p', { className: 'empty' }, '★ marks who you control when a battle starts. Tap another star to change it.'),
         h('button', {
           className: `pill${tab === 'hire' ? ' on' : ''}`,
           onclick: () => {

@@ -69,6 +69,8 @@ export class Guy {
   totalHits = 0;
   totalShots = 0;
   teamnum = 0;
+  /** The squad member the player starts a battle in control of (not in the original). */
+  leader = false;
 
   constructor(family: number) {
     const base = BASE[family] ?? UNKNOWN;

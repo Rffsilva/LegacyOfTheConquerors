@@ -96,6 +96,13 @@ describe('World', () => {
     expect(Math.abs(control.xpos - startX) + Math.abs(control.ypos - startY)).toBeGreaterThan(0);
   });
 
+  it('starts in control of the squad leader', () => {
+    const guys = squad(LivingFamily.SOLDIER, LivingFamily.ARCHER, LivingFamily.MAGE);
+    guys[1].leader = true;
+    const world = makeWorld('scen1', 7, guys);
+    expect(world.players[0].control!.myguy).toBe(guys[1]);
+  });
+
   it('switches to another squad member', () => {
     const world = makeWorld('scen1');
     const first = world.players[0].control!;
