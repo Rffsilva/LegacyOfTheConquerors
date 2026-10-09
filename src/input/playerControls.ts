@@ -142,6 +142,12 @@ export class PlayerControls {
 
   /** On-screen joystick plus action buttons for phones and tablets. */
   private bindTouch(root: HTMLElement): void {
+    // Phaser would take touches on the controls for touches on the map: a thumb on the stick plus
+    // a finger dragging the map would read as a pinch. Cancelling them keeps them away from it.
+    const swallow = (e: TouchEvent) => e.preventDefault();
+    root.addEventListener('touchstart', swallow, { passive: false });
+    this.cleanup.push(() => root.removeEventListener('touchstart', swallow));
+
     const stick = root.querySelector<HTMLElement>('.stick');
     const knob = root.querySelector<HTMLElement>('.stick-knob');
     if (stick && knob) {

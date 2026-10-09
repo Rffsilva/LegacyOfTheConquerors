@@ -3,7 +3,7 @@ import { BootScene, SoundLoaderScene } from './scenes/BootScene.ts';
 import { MapScene } from './scenes/MapScene.ts';
 import './style.css';
 
-new Phaser.Game({
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#000000',
@@ -20,3 +20,10 @@ new Phaser.Game({
   scene: [BootScene, MapScene, SoundLoaderScene],
 });
 
+// Phaser refreshes the moment a phone rotates, while the page still has its old size, and then
+// misses the resize that follows, leaving the game one rotation behind. Refresh again once the
+// container has really changed size.
+new ResizeObserver(() => {
+  game.scale.getParentBounds();
+  game.scale.refresh();
+}).observe(document.getElementById('game')!);

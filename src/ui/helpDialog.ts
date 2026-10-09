@@ -96,6 +96,7 @@ const BODIES: Record<Tab, () => Node[]> = {
           h('dd', {}, `${keyLabel(keys.alternate[0] ?? 'ShiftLeft')} + ${keyLabel(keys.yell[0] ?? 'KeyF')}`),
         ),
         p('Change any key in ⚙ Settings.'),
+        p('Drag the map with the mouse to look around and use the wheel to zoom. The camera goes back to your character as soon as you move.'),
       ),
       section('Gamepad', list([
         'Left stick or d-pad: move',
@@ -105,7 +106,8 @@ const BODIES: Record<Tab, () => Node[]> = {
       section('Touch', list([
         'Joystick (bottom left): move',
         'Attack (hold), Special, Swap, Yo, and Alt (toggles the alternate special)',
-        'Drag the map to look around; pinch to zoom',
+        'Drag the map to look around; the camera goes back to your character when you move',
+        'Pinch to zoom',
       ])),
     ];
   },

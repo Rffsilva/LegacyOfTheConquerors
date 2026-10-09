@@ -197,7 +197,7 @@ export class MapScene extends Phaser.Scene {
 
     const control = world.players[0]?.control;
     const image = control ? view.imageFor(control) : undefined;
-    if (image && this.running) this.controls?.follow(image.x + image.width / 2, image.y + image.height / 2, delta);
+    if (image) this.controls?.follow(image.x + image.width / 2, image.y + image.height / 2);
   }
 
   private setRunning(running: boolean): void {
