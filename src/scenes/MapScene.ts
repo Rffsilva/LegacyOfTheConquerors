@@ -268,13 +268,14 @@ export class MapScene extends Phaser.Scene {
   private listenOnline(config: OnlineBattleConfig, battle: OnlineBattle): void {
     const { campaign } = config;
     campaign.onBattle = (message) => message.setup.id === battle.id && battle.add(message.frames, message.now);
-    campaign.onTicks = (frames) => battle.add(frames);
+    campaign.takeTicks((frames) => battle.add(frames));
     // The device that got there first already sent the results; the ticks that led there are
     // on their way to us too, so play them out (and see the victory) before leaving.
     campaign.onBattleEnd = (id, reason) => id === battle.id && (this.endedBecause = reason);
     campaign.onReport = (id, report) => id === battle.id && (this.serverReport = report);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      campaign.onBattle = campaign.onTicks = campaign.onBattleEnd = campaign.onReport = undefined;
+      campaign.onBattle = campaign.onBattleEnd = campaign.onReport = undefined;
+      campaign.takeTicks(undefined);
     });
   }
 

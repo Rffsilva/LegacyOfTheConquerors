@@ -17,6 +17,8 @@ import {
   type ServerBattle,
 } from '../src/online/battle.ts';
 import { decodeInput, encodeInput, Lockstep, type FieldOptions, type Frame } from '../src/online/lockstep.ts';
+import { OnlineBattle } from '../src/online/onlineBattle.ts';
+import type { OnlineCampaign } from '../src/online/onlineCampaign.ts';
 import type { Whereabouts } from '../src/online/protocol.ts';
 import { act, createRoom, joinRoom, memberView, toData, type RoomState } from '../src/online/room.ts';
 import { NO_INPUT } from '../src/sim/player.ts';
@@ -161,5 +163,28 @@ describe('lockstep battles', () => {
     expect(memberView(state, B).team.map((g) => g.name)).toEqual(['MAGE1']);
     expect(reports.get(B)?.fallen).toEqual(['ELF1']);
     expect(memberView(state, C).open).toContain(2);
+  });
+});
+
+describe('playing an online battle on a device', () => {
+  it('never guesses a missing tick: it stops there and asks for the log', () => {
+    const state = room();
+    const battle = startBattle(state, newLobby(state), [A, B], 'battle-5', 11);
+    const frames = run(battle, 6, (n) => setInput(battle, 0, encodeInput({ ...NO_INPUT, moveX: n < 4 ? 1 : -1 })));
+    let asked = 0;
+    const campaign = { joinBattle: () => asked++, sendInput: () => undefined } as unknown as OnlineCampaign;
+    const device = new OnlineBattle(campaign, { t: 'battle', setup: battle.setup, frames: [], now: 0, you: 1 }, field('scen1'));
+    // Tick 4 (where player 1 turns round) is lost on the way.
+    device.add(frames.filter((f) => f.n !== 4));
+    expect(device.backlog).toBe(3);
+    expect(asked).toBe(1);
+    while (device.playOne());
+    expect(device.lockstep.tick).toBe(3);
+    // The log fills the gap; the device then matches one that saw every tick.
+    device.add(battle.log, battle.now);
+    while (device.playOne());
+    const reference = new Lockstep(battle.setup, field('scen1'));
+    for (const frame of frames) reference.play(frame);
+    expect(snapshot(device.world)).toBe(snapshot(reference.world));
   });
 });

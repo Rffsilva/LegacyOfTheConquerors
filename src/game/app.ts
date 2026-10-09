@@ -246,6 +246,8 @@ export class App {
     campaign.onChange = (change) => {
       if (change.notice) viewerUi().toast(change.notice);
     };
+    // The battle screen takes over from here (a second copy of this message must not restart it).
+    campaign.onBattle = undefined;
     this.startBattle({
       id,
       mode: 'online',

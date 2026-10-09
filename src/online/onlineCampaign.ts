@@ -51,11 +51,16 @@ export class OnlineCampaign {
   onChange?: (change: CampaignChange) => void;
   /** A battle to play: just started, joined, or sent again after reconnecting. */
   onBattle?: (message: BattleMessage) => void;
-  onTicks?: (frames: Frame[]) => void;
   onBattleEnd?: (id: string, reason: string) => void;
   onReport?: (id: string, report: BattleReport) => void;
   /** The battle we're playing, to rejoin after a dropped connection. */
   private following: string | null = null;
+  /**
+   * Ticks of that battle no one has taken yet: they start coming while the battle screen is
+   * still loading, and losing any would make this device's battle drift from everyone else's.
+   */
+  private ticks: Frame[] = [];
+  private tickHandler?: (frames: Frame[]) => void;
 
   private readonly session: Session;
   private invite: string | null;
@@ -117,9 +122,16 @@ export class OnlineCampaign {
     this.send({ t: 'battle-join' });
   }
 
+  /** Hands over the battle's ticks as they come (and any that came before). */
+  takeTicks(handler: ((frames: Frame[]) => void) | undefined): void {
+    this.tickHandler = handler;
+    if (handler && this.ticks.length) handler(this.ticks.splice(0));
+  }
+
   /** Out of the battle: our squad fights on under the computer. */
   leaveBattle(): void {
     this.following = null;
+    this.ticks = [];
     this.send({ t: 'battle-leave' });
   }
 
@@ -228,14 +240,18 @@ export class OnlineCampaign {
       const following = this.following;
       if (following && msg.campaign.battle?.id !== following) {
         this.following = null;
+        this.ticks = [];
         this.onBattleEnd?.(following, 'The battle was interrupted.');
       }
       this.setStatus('online', { view: viewChanged });
     } else if (msg.t === 'battle') {
+      if (this.following !== msg.setup.id) this.ticks = [];
       this.following = msg.setup.id;
       this.onBattle?.(msg);
     } else if (msg.t === 'ticks') {
-      this.onTicks?.(msg.frames);
+      if (!this.following) return;
+      if (this.tickHandler) this.tickHandler(msg.frames);
+      else this.ticks.push(...msg.frames);
     } else if (msg.t === 'battle-end') {
       if (this.following === msg.id) this.following = null;
       this.onBattleEnd?.(msg.id, msg.reason);
