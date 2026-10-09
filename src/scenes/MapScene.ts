@@ -108,6 +108,8 @@ export class MapScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.view?.destroy());
 
     this.controls = new CameraControls(this, width * GRID_SIZE, height * GRID_SIZE);
+    const unwatchInsets = viewerUi().watchInsets((insets) => this.controls?.setInsets(insets));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, unwatchInsets);
     const control = this.world.players[0]?.control;
     if (control) this.controls.centerOn(control.xpos, control.ypos);
     else this.controls.centerOn(...this.squadCentre(width * GRID_SIZE, height * GRID_SIZE));
