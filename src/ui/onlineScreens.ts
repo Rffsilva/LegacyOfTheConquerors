@@ -3,7 +3,7 @@
 
 import { inviteLink, readInvite, type KnownCampaign } from '../online/client.ts';
 import type { OnlineCampaign } from '../online/onlineCampaign.ts';
-import { h } from './dom.ts';
+import { formatNumber, h } from './dom.ts';
 
 type Show = (...content: Node[]) => void;
 
@@ -193,8 +193,20 @@ export function presenceBar(campaign: OnlineCampaign): { element: HTMLElement; u
     },
     title: 'Share a link to this campaign. Friends also need the online password.',
   }, '✉ Invite');
+  const bank = bankPanel(campaign);
+  const bankButton = h('button', {
+    className: 'pill small',
+    ariaExpanded: 'false',
+    onclick: () => {
+      bank.element.hidden = !bank.element.hidden;
+      bankButton.ariaExpanded = String(!bank.element.hidden);
+      if (!bank.element.hidden) bank.focus();
+    },
+    title: 'The campaign bank: put in cash for your friends, or take some out.',
+  });
   const element = h('section', { className: 'online-bar' },
-    h('div', { className: 'online-bar-top' }, h('div', { className: 'online-heading' }, title, status), invite),
+    h('div', { className: 'online-bar-top' }, h('div', { className: 'online-heading' }, title, status), h('div', { className: 'online-actions' }, bankButton, invite)),
+    bank.element,
     members,
   );
 
@@ -208,6 +220,8 @@ export function presenceBar(campaign: OnlineCampaign): { element: HTMLElement; u
       refused: campaign.refusal,
     };
     title.textContent = campaign.info?.name ?? '';
+    bankButton.textContent = `🏦 Bank ${formatNumber(campaign.info?.bank ?? 0)}`;
+    bank.update();
     status.textContent = `${text[campaign.status]}${unsent ? ` · ${unsent} battle${unsent > 1 ? 's' : ''} to send` : ''}`;
     status.dataset.status = campaign.status;
     members.replaceChildren(
@@ -222,6 +236,74 @@ export function presenceBar(campaign: OnlineCampaign): { element: HTMLElement; u
   };
   update();
   return { element, update };
+}
+
+/**
+ * The campaign bank, opened from the online bar: put cash in or take it out, and see who did
+ * what lately. Everyone in the campaign shares it.
+ */
+function bankPanel(campaign: OnlineCampaign): { element: HTMLElement; update: () => void; focus: () => void } {
+  const balance = h('strong', {});
+  const amount = h('input', { type: 'number', min: '1', step: '1', inputMode: 'numeric', placeholder: 'Amount', ariaLabel: 'Amount' });
+  const status = h('p', { className: 'bank-status', role: 'status' });
+  const log = h('ul', { className: 'bank-log', ariaLabel: 'Latest deposits and withdrawals' });
+  const move = (sign: 1 | -1) => {
+    const n = Math.trunc(Number(amount.value));
+    if (!(n > 0)) {
+      status.textContent = 'Type an amount first.';
+      return amount.focus();
+    }
+    const result = campaign.bank(sign * n);
+    status.textContent = result.ok ? (sign > 0 ? `You put ${formatNumber(n)} in the bank.` : `You took ${formatNumber(n)} out.`) : result.reason ?? '';
+    if (result.ok) amount.value = '';
+  };
+  // Enter (the form's submit) puts in; the other buttons mustn't submit it too.
+  const deposit = h('button', { className: 'pill primary', type: 'submit' }, 'Put in');
+  const withdraw = h('button', { className: 'pill', type: 'button', onclick: () => move(-1) }, 'Take out');
+  const all = h('button', {
+    className: 'pill small',
+    type: 'button',
+    onclick: () => {
+      amount.value = String(campaign.view.money);
+      amount.focus();
+    },
+    title: 'All your cash',
+  }, 'All mine');
+  const element = h('div', { className: 'bank', hidden: true },
+    h('p', { className: 'bank-balance' }, 'Campaign bank: ', balance, h('span', {}, ' · shared by everyone in the campaign')),
+    h('form', { className: 'bank-move', onsubmit: (e: Event) => (e.preventDefault(), move(1)) }, amount, all, deposit, withdraw),
+    status,
+    log,
+  );
+
+  const update = () => {
+    const info = campaign.info;
+    balance.textContent = formatNumber(info?.bank ?? 0);
+    const online = campaign.status === 'online' && !campaign.me?.inBattle;
+    for (const button of [deposit, withdraw, all]) button.disabled = !online;
+    log.replaceChildren(
+      ...(info?.bankLog ?? []).slice(0, 6).map((entry) =>
+        h('li', {},
+          h('strong', {}, entry.name),
+          entry.amount > 0 ? ` put in ${formatNumber(entry.amount)}` : ` took out ${formatNumber(-entry.amount)}`,
+          h('span', { className: 'when' }, ` · ${timeAgo(entry.at)}`),
+        ),
+      ),
+    );
+    if (!info?.bankLog.length) log.replaceChildren(h('li', {}, 'Nobody has used the bank yet.'));
+  };
+  update();
+  return { element, update, focus: () => amount.focus() };
+}
+
+function timeAgo(at: number): string {
+  const minutes = Math.round((Date.now() - at) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const days = Math.round(hours / 24);
+  return `${days} day${days > 1 ? 's' : ''} ago`;
 }
 
 /**

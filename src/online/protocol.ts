@@ -62,6 +62,13 @@ export interface BattleInfo {
   playing: string[];
 }
 
+/** A deposit (positive) or withdrawal (negative) in the campaign bank. */
+export interface BankEntry {
+  name: string;
+  amount: number;
+  at: number;
+}
+
 export interface CampaignInfo {
   id: string;
   name: string;
@@ -74,6 +81,9 @@ export interface CampaignInfo {
   /** The field everyone is getting ready for. */
   field: number;
   battle: BattleInfo | null;
+  /** The campaign bank, shared by everyone, and its latest deposits and withdrawals. */
+  bank: number;
+  bankLog: BankEntry[];
 }
 
 /** A squad member's identity, so the server can tell the team didn't change during a battle. */
@@ -88,6 +98,8 @@ export type ClientMessage =
   | { t: 'dismiss'; index: number }
   | { t: 'leader'; index: number }
   | { t: 'rename'; index: number; name: string }
+  /** Cash into the campaign bank (positive amount) or out of it (negative). */
+  | { t: 'bank'; amount: number }
   | { t: 'where'; where: Whereabouts }
   /** A battle fought on this device. `id` is unique per battle, so a resend is applied once. */
   | { t: 'result'; id: string; scenario: number; par: number; squad: SquadEntry[]; summary: BattleSummary }
@@ -118,7 +130,7 @@ export type ServerMessage =
  * Players' devices must run the same battle code, or their battles drift apart. Bump this with
  * any change to the simulation or these messages; older games are asked to reload.
  */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 /** WebSocket close code for "not allowed in this campaign"; the client stops reconnecting. */
 export const CLOSE_FORBIDDEN = 4003;

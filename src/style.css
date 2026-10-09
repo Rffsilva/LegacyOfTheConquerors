@@ -993,6 +993,82 @@ canvas.sprite {
   font-size: 0.9rem;
 }
 
+.online-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* The campaign bank, opened from the online bar. */
+.bank {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgb(0 0 0 / 0.18);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.bank[hidden] {
+  display: none;
+}
+
+.bank-balance {
+  margin: 0;
+}
+
+.bank-balance strong {
+  color: var(--accent);
+  font-size: 1.1rem;
+}
+
+.bank-balance span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.bank-move {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.bank-move input {
+  flex: 1 1 110px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 10px;
+  font: inherit;
+  color: var(--text);
+  background: rgb(0 0 0 / 0.3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bank-status {
+  margin: 0;
+  min-height: 1.2em;
+  font-size: 0.85rem;
+}
+
+.bank-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  list-style: none;
+}
+
+.bank-log strong {
+  color: var(--text);
+}
+
 .online-members {
   display: flex;
   flex-direction: column;

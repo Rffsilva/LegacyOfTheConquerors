@@ -101,6 +101,29 @@ export class OnlineCampaign {
     rename: (index, name) => this.change(() => rename(this.view, index, name), () => ({ t: 'rename', index, name })),
   };
 
+  /**
+   * Puts cash into the campaign bank (a positive amount) or takes it out (negative). Shown here
+   * at once; the server checks it and has the last word.
+   */
+  bank(amount: number): ActionResult {
+    const info = this.info;
+    const n = Math.trunc(amount);
+    if (!info || !n) return { ok: false, reason: 'Choose an amount.' };
+    if (n > this.view.money) return { ok: false, reason: `You only have ${this.view.money.toLocaleString('en-US')}.` };
+    if (-n > info.bank) return { ok: false, reason: `The bank only has ${info.bank.toLocaleString('en-US')}.` };
+    const result = this.change(
+      () => {
+        this.view.money -= n;
+        info.bank += n;
+        info.bankLog = [{ name: this.me?.name ?? '', amount: n, at: Date.now() }, ...info.bankLog];
+        return { ok: true };
+      },
+      () => ({ t: 'bank', amount: n }),
+    );
+    if (result.ok) this.onChange?.({ view: true });
+    return result;
+  }
+
   setWhere(where: Whereabouts): void {
     this.where = where;
     this.send({ t: 'where', where });
@@ -273,7 +296,8 @@ export class OnlineCampaign {
   }
 
   private applyState(campaign: CampaignInfo, you: MemberCampaign): void {
-    this.info = campaign;
+    // (A copy saved on this device by an older version has no bank.)
+    this.info = { ...campaign, bank: campaign.bank ?? 0, bankLog: campaign.bankLog ?? [] };
     Object.assign(this.view, {
       name: campaign.name,
       difficulty: campaign.difficulty,
