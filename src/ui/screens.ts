@@ -103,6 +103,8 @@ export interface BarracksActions {
   team: TeamOps;
   /** Shown under the top bar (online campaigns: who's playing, the invite link). */
   extra?: HTMLElement;
+  /** Replaces the field picker and battle button (online campaigns: the ready-up lobby). */
+  footer?: HTMLElement;
   settings: () => void;
   help: () => void;
   fight: (scenario: number) => void;
@@ -322,7 +324,7 @@ export class Screens {
         }, '⚔ To battle'),
       );
 
-      this.show(h('div', { className: 'barracks' }, header, actions.extra ?? '', h('p', { className: 'notice', role: 'status' }, message), h('main', {}, team, panel), footer));
+      this.show(h('div', { className: 'barracks' }, header, actions.extra ?? '', h('p', { className: 'notice', role: 'status' }, message), h('main', {}, team, panel), actions.footer ?? footer));
       if (rendered) {
         this.root.scrollTop = scroll;
         teamList.scrollTop = listScroll;

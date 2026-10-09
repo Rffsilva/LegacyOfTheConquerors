@@ -77,9 +77,15 @@ The binary formats are documented in [src/formats](src/formats).
 ## Online campaigns
 
 Online campaigns are shared: everyone you invite keeps their own barracks, team and cash inside
-the campaign, and any field one player opens up is open to all. Battles still run on each
-player's own device and their results are sent to the server (results fought offline are sent
-when the connection comes back). Live co-op battles are the next stage.
+the campaign, and any field one player opens up is open to all. Battles are fought together:
+everyone in the barracks picks **Ready**, and when all of them are, the battle starts for all.
+Friends can join a battle in progress, leave it (their squad fights on under the computer) and
+come back; a dropped connection does the same after 10 seconds.
+
+Each device runs the same battle in lockstep: the simulation is deterministic (integer maths and
+a seeded random generator), so the server only keeps the clock and relays what changed in each
+player's input every tick, and keeps that log so a late joiner can replay the battle so far.
+When it ends, the first device to get there sends everyone's results.
 
 The server is a Cloudflare Worker with Durable Objects (`server/`); the rules it applies live in
 `src/online/room.ts`, shared with the game and the tests. Playing online needs the access
@@ -122,8 +128,8 @@ tests/         Vitest suites
 3. ~~Campaign: recruiting, training, rewards and saving~~
 4. ~~**Presentation.** Radar, settings, music, field manual~~
 5. ~~**Ship it.** Installable offline web app for desktop and mobile browsers~~
-6. **Online campaigns** (in progress): ~~shared campaigns with invites~~, live co-op battles,
-   reconnection and smoother play on slow connections
+6. **Online campaigns** (in progress): ~~shared campaigns with invites~~, ~~live co-op battles~~,
+   smoother play on slow connections
 
 ## License and credits
 

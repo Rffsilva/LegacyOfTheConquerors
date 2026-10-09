@@ -200,10 +200,12 @@ export interface BattleSummary {
   survivors: Survivor[];
 }
 
-export function summarizeBattle(world: World, squad: readonly Guy[]): BattleSummary {
+/** A battle's summary for one squad; online, `player` picks whose squad (and score) it is. */
+export function summarizeBattle(world: World, squad: readonly Guy[], player?: number): BattleSummary {
   const outcome = world.outcome ?? { result: 'defeat', reason: 'Battle abandoned.' };
   // Survivors are the squad's records still standing (plus split-off slimes with a copied record).
-  const standing = new Set(world.oblist.filter((o) => !o.dead && o.order === Order.LIVING && o.myguy && o.teamNum === 0).map((o) => o.myguy!));
+  const ours = (o: World['oblist'][number]) => (player === undefined ? o.teamNum === 0 : o.squad === player);
+  const standing = new Set(world.oblist.filter((o) => !o.dead && o.order === Order.LIVING && o.myguy && ours(o)).map((o) => o.myguy!));
   const survivors: Survivor[] = [];
   for (const guy of standing) {
     let from = squad.indexOf(guy);
@@ -213,7 +215,8 @@ export function summarizeBattle(world: World, squad: readonly Guy[]): BattleSumm
     for (const field of RECORD_FIELDS) survivor[field] = guy[field];
     survivors.push(survivor);
   }
-  return { outcome, score: world.score[0], ticks: world.ticks, survivors };
+  const score = player === undefined ? world.score[0] : (world.playerScore[player] ?? 0);
+  return { outcome, score, ticks: world.ticks, survivors };
 }
 
 /**

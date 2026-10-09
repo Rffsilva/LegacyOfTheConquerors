@@ -20,7 +20,7 @@ export interface ViewerActions {
   menuToggled(open: boolean): void;
 }
 
-export type BattleMode = 'skirmish' | 'campaign';
+export type BattleMode = 'skirmish' | 'campaign' | 'online';
 
 export interface UnitCard {
   name: string;
@@ -272,14 +272,16 @@ class ViewerUi {
     this.root.dataset.mode = mode;
     this.picker.value = scenario.id;
     this.root.querySelector('.field-title')!.textContent = titleCase(scenario.title || scenario.id);
-    this.root.querySelector('.quit')!.textContent = mode === 'campaign' ? '🏳 Abandon battle' : '☰ Main menu';
+    this.root.querySelector('.quit')!.textContent = mode === 'campaign' ? '🏳 Abandon battle' : mode === 'online' ? '🚪 Leave the battle' : '☰ Main menu';
     if (mode === 'skirmish') history.replaceState(null, '', `?scen=${scenario.id}`);
 
     const paragraphs = reflow(scenario.text);
     this.briefing.replaceChildren(
       ...(paragraphs.length ? paragraphs : ['No briefing for this field.']).map((text) => h('p', {}, text)),
       h('p', { className: 'hint' },
-        'You control one squad member; the others fight on their own. Defeat every enemy, then walk onto the exit. Moving or attacking starts the battle; Esc or ☰ pauses.',
+        mode === 'online'
+          ? 'You control one of your squad; the others, and your friends\' squads, fight alongside. Defeat every enemy, then walk onto the exit. Online battles don\'t pause: if you leave, your squad fights on and you can rejoin from the barracks.'
+          : 'You control one squad member; the others fight on their own. Defeat every enemy, then walk onto the exit. Moving or attacking starts the battle; Esc or ☰ pauses.',
       ),
     );
     this.closeMenuQuietly();
@@ -341,7 +343,7 @@ class ViewerUi {
     const reason = outcome.result === 'defeat' ? outcome.reason : outcome.result === 'retreat' ? 'You withdrew from the field.' : 'The field is yours.';
     const button = (text: string, act: string) => h('button', { className: 'pill', dataset: { act } }, text);
     const actions = h('div', { className: 'actions' });
-    if (this.mode === 'campaign') actions.append(button('Continue', 'finish'));
+    if (this.mode !== 'skirmish') actions.append(button('Continue', 'finish'));
     else actions.append(button('Fight again', 'restart'), ...(won ? [button('Next field', 'next-scenario')] : []), button('Main menu', 'menu'));
     this.outcome.replaceChildren(
       h('h2', {}, won ? 'Victory!' : outcome.result === 'retreat' ? 'Withdrawn' : 'Defeat!'),
