@@ -10,8 +10,9 @@ export interface Insets {
 }
 
 /**
- * Pan and zoom for a world of fixed size: drag to pan, pinch or mouse wheel to zoom toward the
- * pointer, and smooth following of a target. Works the same with mouse, touch and pen.
+ * Pan and zoom for a world of fixed size: the camera stays locked on a target until the user drags
+ * the map (or picks a spot on the radar), and pinch or mouse wheel zooms toward the pointer.
+ * Works the same with mouse, touch and pen.
  *
  * The camera may scroll past the top and bottom of the map by the height of the overlays there
  * (HUD, touch controls), so a unit at the edge of the map can still be seen clear of them.
@@ -22,8 +23,10 @@ export class CameraControls {
   private readonly worldWidth: number;
   private readonly worldHeight: number;
   private pinchDistance = 0;
-  /** When the user last panned by hand; following pauses for a moment after that. */
-  private lastManual = -Infinity;
+  /** Set when the user moves the camera by hand; it stays put until resumeFollowing(). */
+  private detached = false;
+  /** Set once the user zooms; until then, the zoom follows the screen size (e.g. on rotation). */
+  private zoomed = false;
   private insets: Insets = { top: 0, bottom: 0 };
 
   constructor(scene: Phaser.Scene, worldWidth: number, worldHeight: number) {
@@ -38,8 +41,8 @@ export class CameraControls {
     scene.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
     scene.input.on(Phaser.Input.Events.POINTER_UP, () => (this.pinchDistance = 0));
     scene.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onWheel, this);
-    scene.scale.on(Phaser.Scale.Events.RESIZE, this.clampZoom, this);
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.scale.off(Phaser.Scale.Events.RESIZE, this.clampZoom, this));
+    scene.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => scene.scale.off(Phaser.Scale.Events.RESIZE, this.onResize, this));
 
 
     this.setZoom(this.defaultZoom());
@@ -57,6 +60,7 @@ export class CameraControls {
 
   /** Multiplies the zoom, keeping the world point under (screenX, screenY) fixed. */
   zoomBy(factor: number, screenX = this.cam.width / 2, screenY = this.cam.height / 2): void {
+    this.zoomed = true;
     const cam = this.cam;
     const oldZoom = cam.zoom;
     const newZoom = Phaser.Math.Clamp(oldZoom * factor, this.minZoom(), MAX_ZOOM);
@@ -75,26 +79,21 @@ export class CameraControls {
     this.setZoom(this.cam.zoom);
   }
 
-  /** Eases the camera toward (x, y), placed in the middle of the uncovered area, unless the user recently panned by hand. */
-  follow(x: number, y: number, delta: number): void {
-    if (this.scene.time.now - this.lastManual < 2500) return;
-    const cam = this.cam;
-    const t = 1 - Math.exp(-delta / 120);
-    const cx = cam.scrollX + cam.width / 2;
-    const cy = cam.scrollY + cam.height / 2;
-    const ty = y - (this.insets.top - this.insets.bottom) / 2 / cam.zoom;
-    cam.centerOn(cx + (x - cx) * t, cy + (ty - cy) * t);
+  /** Keeps (x, y) in the middle of the uncovered area, unless the user has moved the camera by hand. */
+  follow(x: number, y: number): void {
+    if (this.detached) return;
+    this.cam.centerOn(x, y - (this.insets.top - this.insets.bottom) / 2 / this.cam.zoom);
   }
 
-  /** Jump to a spot chosen by the user (e.g. on the minimap), pausing following for a moment. */
+  /** Jump to a spot chosen by the user (e.g. on the minimap), leaving the target until resumeFollowing(). */
   lookAt(x: number, y: number): void {
-    this.lastManual = this.scene.time.now;
+    this.detached = true;
     this.cam.centerOn(x, y);
   }
 
-  /** Resume following straight away (e.g. when the player moves). */
+  /** Lock back onto the target (e.g. when the player moves). */
   resumeFollowing(): void {
-    this.lastManual = -Infinity;
+    this.detached = false;
   }
 
   private minZoom(): number {
@@ -102,8 +101,8 @@ export class CameraControls {
     return Math.min(width / this.worldWidth, height / this.worldHeight);
   }
 
-  private clampZoom(): void {
-    this.setZoom(Phaser.Math.Clamp(this.cam.zoom, this.minZoom(), MAX_ZOOM));
+  private onResize(): void {
+    this.setZoom(this.zoomed ? Phaser.Math.Clamp(this.cam.zoom, this.minZoom(), MAX_ZOOM) : this.defaultZoom());
   }
 
   /**
@@ -136,7 +135,7 @@ export class CameraControls {
     }
 
     if (pointer.isDown) {
-      this.lastManual = this.scene.time.now;
+      this.detached = true;
       const dx = (pointer.x - pointer.prevPosition.x) / this.cam.zoom;
       const dy = (pointer.y - pointer.prevPosition.y) / this.cam.zoom;
       this.cam.setScroll(this.cam.scrollX - dx, this.cam.scrollY - dy);
