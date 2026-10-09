@@ -13,6 +13,7 @@ import {
   MAX_TEAM,
   newCampaign,
   recruit,
+  rename,
   serialize,
   setLeader,
   squadFor,
@@ -105,6 +106,16 @@ describe('team management', () => {
     dismiss(c, 1);
     expect(leaderIndex(c)).toBe(0);
     expect(squadFor(c).map((g) => g.leader)).toEqual([true, false]);
+  });
+
+  it('renames team members like the original: plain capitals, 11 at most', () => {
+    const c = newCampaign();
+    hire(c, recruit(c, L.SOLDIER));
+    expect(rename(c, 0, 'Rui the bold')).toEqual({ ok: true });
+    expect(c.team[0].name).toBe('RUI THE BOL');
+    expect(rename(c, 0, '  ').ok).toBe(false);
+    expect(rename(c, 3, 'Ana').ok).toBe(false);
+    expect(c.team[0].name).toBe('RUI THE BOL');
   });
 
   it('round-trips through JSON', () => {

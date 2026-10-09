@@ -115,6 +115,20 @@ export function train(campaign: Campaign, index: number, proposed: Guy): ActionR
   return { ok: true };
 }
 
+/** Unit names are like the original's: up to 11 plain capitals. Returns '' if nothing usable is left. */
+export function cleanName(name: unknown): string {
+  return String(name ?? '').toUpperCase().replace(/[^\x20-\x7E]/g, '').trim().slice(0, 11);
+}
+
+export function rename(campaign: Campaign, index: number, name: string): ActionResult {
+  const guy = campaign.team[index];
+  if (!guy) return { ok: false, reason: 'No such team member.' };
+  const clean = cleanName(name);
+  if (!clean) return { ok: false, reason: 'Names need at least one letter or number (A-Z, 0-9).' };
+  guy.name = clean;
+  return { ok: true };
+}
+
 export function dismiss(campaign: Campaign, index: number): void {
   campaign.team.splice(index, 1);
 }

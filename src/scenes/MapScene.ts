@@ -193,7 +193,8 @@ export class MapScene extends Phaser.Scene {
       this.hudTimer = 0;
       this.updateHud();
     }
-    view.draw(this.running ? this.accumulator / tick : 1, settings.value.healthBars, world.players[0]?.control?.teamNum ?? 0);
+    const self = world.players[0]?.control ?? null;
+    view.draw(this.running ? this.accumulator / tick : 1, settings.value.healthBars, self?.teamNum ?? 0, { self: self && !self.dead ? self : null, friends: [] });
 
     const control = world.players[0]?.control;
     const image = control ? view.imageFor(control) : undefined;
