@@ -545,6 +545,36 @@ canvas.sprite {
   font-size: 1.9rem !important;
 }
 
+.version-switch {
+  display: flex;
+  align-self: center;
+  gap: 2px;
+  padding: 3px;
+  font-size: 0.85rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.version-switch > * {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 16px;
+  color: var(--muted);
+  text-decoration: none;
+  border-radius: 999px;
+}
+
+.version-switch a:hover {
+  color: var(--text);
+}
+
+.version-switch .on {
+  color: var(--accent);
+  background: rgb(214 170 92 / 0.18);
+}
+
 .menu-heroes {
   display: flex;
   justify-content: center;
